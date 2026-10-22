@@ -25,6 +25,7 @@ import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 import { qualityForWidth, VideoProbeResult } from '@/lib/video-probe';
 
+import DoubanComments from '@/components/DoubanComments';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
 
@@ -1891,6 +1892,12 @@ function PlayPageClient() {
             </div>
           </div>
         </div>
+
+        <DoubanComments
+          title={videoTitle}
+          year={videoYear || detail?.year || ''}
+          doubanId={searchParams.get('douban_id') || String(detail?.douban_id || '')}
+        />
 
         {/* 详情展示 */}
         <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>

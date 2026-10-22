@@ -5,8 +5,9 @@ import { processImageUrl } from '@/lib/utils';
 
 import VideoCard from './VideoCard';
 
+const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 jest.mock('@/lib/db.client', () => ({}));
 jest.mock('next/image', () => ({
@@ -75,4 +76,29 @@ it('leaves non-Douban posters alone and still supports custom image proxies', ()
   expect(processImageUrl(other)).toBe(
     `/custom-proxy?url=${encodeURIComponent(other)}`
   );
+});
+
+it('opens the details page with the existing Douban identity instead of autoplaying', () => {
+  render(
+    <VideoCard
+      from='douban'
+      title='肖申克的救赎'
+      poster={poster}
+      douban_id='1292052'
+      year='1994'
+      type='movie'
+    />
+  );
+  fireEvent.click(
+    screen.getByRole('link', { name: /查看 肖申克的救赎 的详情/ })
+  );
+  const url = new URL(
+    mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
+    'https://example.test'
+  );
+  expect(url.pathname).toBe('/detail');
+  expect(url.searchParams.get('douban_id')).toBe('1292052');
+  expect(url.searchParams.get('title')).toBe('肖申克的救赎');
+  expect(url.searchParams.get('stype')).toBe('movie');
+  expect(url.searchParams.get('poster')).toBe(poster);
 });

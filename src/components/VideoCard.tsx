@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { CheckCircle, Heart, Link, PlayCircleIcon } from 'lucide-react';
+import { CheckCircle, Heart, Info, Link } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -205,21 +205,24 @@ export default function VideoCard({
   );
 
   const handleClick = useCallback(() => {
+    const doubanQuery = /^\d{5,12}$/.test(actualDoubanId)
+      ? `&douban_id=${actualDoubanId}`
+      : '';
     if (from === 'douban') {
       router.push(
-        `/play?title=${encodeURIComponent(actualTitle.trim())}${
+        `/detail?title=${encodeURIComponent(actualTitle.trim())}${
           actualYear ? `&year=${actualYear}` : ''
-        }${actualSearchType ? `&stype=${actualSearchType}` : ''}`
+        }${actualSearchType ? `&stype=${actualSearchType}` : ''}${doubanQuery}&poster=${encodeURIComponent(actualPoster || '')}`
       );
     } else if (actualSource && actualId) {
       router.push(
-        `/play?source=${actualSource}&id=${actualId}&title=${encodeURIComponent(
+        `/detail?source=${actualSource}&id=${actualId}&title=${encodeURIComponent(
           actualTitle
         )}${actualYear ? `&year=${actualYear}` : ''}${
           isAggregate ? '&prefer=true' : ''
         }${
           actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''
-        }${actualSearchType ? `&stype=${actualSearchType}` : ''}`
+        }${actualSearchType ? `&stype=${actualSearchType}` : ''}${doubanQuery}&poster=${encodeURIComponent(actualPoster || '')}`
       );
     }
   }, [
@@ -232,6 +235,8 @@ export default function VideoCard({
     isAggregate,
     actualQuery,
     actualSearchType,
+    actualDoubanId,
+    actualPoster,
   ]);
 
   const config = useMemo(() => {
@@ -280,6 +285,12 @@ export default function VideoCard({
     <div
       className='group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-in-out hover:scale-[1.05] hover:z-[500]'
       onClick={handleClick}
+      role='link'
+      tabIndex={0}
+      aria-label={`查看 ${actualTitle} 的详情`}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && event.key === 'Enter') handleClick();
+      }}
     >
       {/* 海报容器 */}
       <div className='relative aspect-[2/3] overflow-hidden rounded-lg'>
@@ -303,10 +314,10 @@ export default function VideoCard({
         {/* 悬浮遮罩 */}
         <div className='absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 ease-in-out group-hover:opacity-100' />
 
-        {/* 播放按钮 */}
+        {/* 详情入口 */}
         {config.showPlayButton && (
           <div className='absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-300 ease-in-out delay-75 group-hover:opacity-100 group-hover:scale-100'>
-            <PlayCircleIcon
+            <Info
               size={50}
               strokeWidth={0.8}
               className='text-white fill-transparent transition-all duration-300 ease-out hover:fill-green-500 hover:scale-[1.1]'
