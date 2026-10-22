@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
 
 import './globals.css';
 import 'sweetalert2/dist/sweetalert2.min.css';
@@ -13,7 +12,6 @@ import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { SiteProvider } from '../components/SiteProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
 
-const inter = Inter({ subsets: ['latin'] });
 
 // 动态生成 metadata，支持配置更新后的标题变化
 export async function generateMetadata(): Promise<Metadata> {
@@ -35,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#000000',
+  themeColor: '#f1f4fb',
   viewportFit: 'cover',
 };
 
@@ -105,9 +103,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body
-        className={`${inter.className} min-h-screen bg-white text-gray-900 dark:bg-black dark:text-gray-200`}
-      >
+      <body className='min-h-screen antialiased'>
         <ThemeProvider
           attribute='class'
           defaultTheme='system'

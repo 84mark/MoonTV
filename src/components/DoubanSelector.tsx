@@ -217,12 +217,12 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
     return (
       <div
         ref={containerRef}
-        className='relative inline-flex bg-gray-200/60 rounded-full p-0.5 sm:p-1 dark:bg-gray-700/60 backdrop-blur-sm'
+        className='glass-segment relative inline-flex rounded-full p-0.5 sm:p-1'
       >
         {/* 滑动的白色背景指示器 */}
         {indicatorStyle.width > 0 && (
           <div
-            className='absolute top-0.5 bottom-0.5 sm:top-1 sm:bottom-1 bg-white dark:bg-gray-500 rounded-full shadow-sm transition-all duration-300 ease-out'
+            className='glass-segment-indicator absolute top-0.5 bottom-0.5 sm:top-1 sm:bottom-1 rounded-full transition-all duration-300 ease-out'
             style={{
               left: `${indicatorStyle.left}px`,
               width: `${indicatorStyle.width}px`,

@@ -158,18 +158,18 @@ function DetailPageClient() {
       <div className='mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-8 md:py-10'>
         <Link
           href='/'
-          className='inline-flex text-sm text-gray-500 hover:text-green-600'
+          className='inline-flex text-sm text-gray-500 hover:text-blue-600'
         >
           ← 返回浏览
         </Link>
-        <section className='grid gap-6 md:grid-cols-[230px_1fr] md:gap-10'>
+        <section className='glass-panel detail-hero grid gap-6 md:grid-cols-[230px_1fr] md:gap-10'>
           <div className='mx-auto w-40 md:w-full'>
             {poster ? (
               <img
                 key={poster}
                 src={poster}
                 alt={`${displayTitle}海报`}
-                className='aspect-[2/3] w-full rounded-2xl bg-gray-100 object-cover shadow-lg dark:bg-gray-800'
+                className='detail-poster aspect-[2/3] w-full bg-gray-100 object-cover dark:bg-gray-800'
                 onError={(event) => {
                   event.currentTarget.style.visibility = 'hidden';
                 }}
@@ -180,8 +180,8 @@ function DetailPageClient() {
               </div>
             )}
           </div>
-          <div className='min-w-0'>
-            <p className='mb-2 text-xs font-semibold tracking-widest text-green-600'>
+          <div className='detail-meta min-w-0'>
+            <p className='mb-2 text-xs font-semibold tracking-widest text-blue-600'>
               影片详情
             </p>
             <h1 className='break-words text-3xl font-bold md:text-4xl'>
@@ -196,7 +196,7 @@ function DetailPageClient() {
                 .join(' · ')}
             </p>
             {subject && (
-              <div className='mt-5 flex items-baseline gap-3'>
+              <div className='detail-rating mt-5 flex items-baseline gap-3'>
                 <span className='text-3xl font-bold text-amber-500'>
                   {subject.rating !== null
                     ? subject.rating.toFixed(1)
@@ -210,12 +210,12 @@ function DetailPageClient() {
               </div>
             )}
             {subject?.directors.length ? (
-              <p className='mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300'>
+              <p className='detail-directors mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300'>
                 导演：{subject.directors.join(' / ')}
               </p>
             ) : null}
             {subject?.actors.length ? (
-              <p className='mt-1 text-sm leading-7 text-gray-600 dark:text-gray-300'>
+              <p className='detail-cast mt-1 text-sm leading-7 text-gray-600 dark:text-gray-300'>
                 主演：{subject.actors.join(' / ')}
               </p>
             ) : null}
@@ -229,7 +229,7 @@ function DetailPageClient() {
             ) : (
               <Link
                 href={playbackLink}
-                className='mt-6 inline-flex items-center gap-2 rounded-xl bg-green-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-green-700'
+                className='mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-blue-700'
               >
                 ▶ 立即播放
               </Link>
@@ -240,7 +240,7 @@ function DetailPageClient() {
                   <span>当前所有源均不可用</span>
                   <button
                     onClick={() => setProbeRetry((value) => value + 1)}
-                    className='ml-3 text-green-600 hover:underline'
+                    className='ml-3 text-blue-600 hover:underline'
                   >
                     重新检测
                   </button>
@@ -257,7 +257,7 @@ function DetailPageClient() {
                   <span>预检测暂未完成，可直接播放</span>
                   <button
                     onClick={() => setProbeRetry((value) => value + 1)}
-                    className='ml-3 text-green-600 hover:underline'
+                    className='ml-3 text-blue-600 hover:underline'
                   >
                     重新检测
                   </button>
@@ -276,7 +276,7 @@ function DetailPageClient() {
             </p>
           </div>
         </section>
-        <section>
+        <section className='glass-panel detail-section'>
           <h2 className='mb-4 text-xl font-semibold'>剧情简介</h2>
           {intro ? (
             <p className='whitespace-pre-line break-words text-sm leading-8 text-gray-600 dark:text-gray-300'>
@@ -293,7 +293,7 @@ function DetailPageClient() {
             {error}{' '}
             <button
               onClick={() => setRetry((value) => value + 1)}
-              className='text-green-600 hover:underline'
+              className='text-blue-600 hover:underline'
             >
               重试
             </button>
@@ -313,7 +313,7 @@ function DetailPageClient() {
                 <button
                   key={item.id}
                   onClick={() => setChosenId(item.id)}
-                  className='rounded-lg border border-gray-300 px-3 py-2 text-sm hover:border-green-500 dark:border-gray-600'
+                  className='rounded-lg border border-gray-300 px-3 py-2 text-sm hover:border-blue-500 dark:border-gray-600'
                 >
                   {item.title}（{item.year || '年份未知'}）
                 </button>
@@ -322,14 +322,14 @@ function DetailPageClient() {
           </section>
         )}
         {subject && (
-          <section>
+          <section className='glass-panel detail-section'>
             <div className='mb-4 flex items-center justify-between'>
               <h2 className='text-xl font-semibold'>剧照</h2>
               <a
                 href={`https://movie.douban.com/subject/${subject.id}/photos?type=S`}
                 target='_blank'
                 rel='noopener noreferrer'
-                className='text-sm text-green-600 hover:underline'
+                className='text-sm text-blue-600 hover:underline'
               >
                 豆瓣全部剧照 ↗
               </a>

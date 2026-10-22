@@ -99,7 +99,7 @@ export default function DoubanComments({
     : `https://www.douban.com/search?q=${encodeURIComponent(title)}`;
   return (
     <section
-      className='rounded-xl border border-gray-200 p-4 dark:border-gray-700 md:p-6'
+      className='glass-panel comments-panel p-4 md:p-6'
       aria-label='豆瓣短评'
     >
       <div className='flex flex-wrap items-center justify-between gap-3'>
@@ -108,7 +108,7 @@ export default function DoubanComments({
           href={doubanUrl}
           target='_blank'
           rel='noopener noreferrer'
-          className='text-sm text-green-600 hover:underline'
+          className='text-sm text-blue-600 hover:underline'
         >
           去豆瓣查看 ↗
         </a>
@@ -132,7 +132,7 @@ export default function DoubanComments({
               <button
                 key={item.id}
                 onClick={() => setSelection(item.id)}
-                className='rounded-lg border border-gray-300 px-3 py-2 text-sm hover:border-green-500 dark:border-gray-600'
+                className='rounded-lg border border-gray-300 px-3 py-2 text-sm hover:border-blue-500 dark:border-gray-600'
               >
                 {item.title} {item.year && `（${item.year}）`}
               </button>
@@ -165,7 +165,7 @@ export default function DoubanComments({
                 href={`https://movie.douban.com/subject/${result.subject?.id}/comments?comment_id=${item.id}`}
                 target='_blank'
                 rel='noopener noreferrer'
-                className='hover:text-green-600'
+                className='hover:text-blue-600'
               >
                 豆瓣原文 ↗
               </a>
@@ -182,7 +182,7 @@ export default function DoubanComments({
                 ? void load(result.nextStart ?? 0, result.nextStart !== null)
                 : setRetry((value) => value + 1)
             }
-            className='text-green-600 hover:underline'
+            className='text-blue-600 hover:underline'
           >
             重试
           </button>
@@ -207,7 +207,7 @@ export default function DoubanComments({
         result?.nextStart !== undefined && (
           <button
             onClick={() => void load(result.nextStart as number, true)}
-            className='mt-2 rounded-lg border border-gray-300 px-4 py-2 text-sm hover:border-green-500 dark:border-gray-600'
+            className='mt-2 rounded-lg border border-gray-300 px-4 py-2 text-sm hover:border-blue-500 dark:border-gray-600'
           >
             加载更多短评
           </button>

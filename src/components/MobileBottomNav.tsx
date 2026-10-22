@@ -70,38 +70,46 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
 
   return (
     <nav
-      className='md:hidden fixed left-0 right-0 z-[600] bg-white/90 backdrop-blur-xl border-t border-gray-200/50 overflow-hidden dark:bg-gray-900/80 dark:border-gray-700/50'
+      className='glass-dock md:hidden fixed left-0 right-0 z-[600] overflow-hidden'
       style={{
         /* 紧贴视口底部，同时在内部留出安全区高度 */
-        bottom: 0,
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        minHeight: 'calc(3.5rem + env(safe-area-inset-bottom))',
+        bottom: 'max(12px, env(safe-area-inset-bottom))',
+        width: 'calc(100% - 24px)',
+        maxWidth: '620px',
+        margin: '0 auto',
+        paddingBottom: 0,
+        minHeight: '64px',
       }}
     >
-      <ul className='flex items-center overflow-x-auto scrollbar-hide'>
+      <ul className='flex items-center gap-1 overflow-x-auto scrollbar-hide p-1.5'>
         {navItems.map((item) => {
           const active = isActive(item.href);
           return (
             <li
               key={item.href}
               className='flex-shrink-0'
-              style={{ width: '20vw', minWidth: '20vw' }}
+              style={{
+                flex: '1 0 0',
+                minWidth: navItems.length > 5 ? '62px' : 0,
+              }}
             >
               <Link
                 href={item.href}
+                data-active={active}
+                aria-current={active ? 'page' : undefined}
                 className='flex flex-col items-center justify-center w-full h-14 gap-1 text-xs'
               >
                 <item.icon
                   className={`h-6 w-6 ${
                     active
-                      ? 'text-green-600 dark:text-green-400'
+                      ? 'text-blue-600 dark:text-blue-400'
                       : 'text-gray-500 dark:text-gray-400'
                   }`}
                 />
                 <span
                   className={
                     active
-                      ? 'text-green-600 dark:text-green-400'
+                      ? 'text-blue-600 dark:text-blue-400'
                       : 'text-gray-600 dark:text-gray-300'
                   }
                 >

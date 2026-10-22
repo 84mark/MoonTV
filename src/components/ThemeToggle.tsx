@@ -15,10 +15,10 @@ export function ThemeToggle() {
     if (!meta) {
       const meta = document.createElement('meta');
       meta.name = 'theme-color';
-      meta.content = theme === 'dark' ? '#0c111c' : '#f9fbfe';
+      meta.content = theme === 'dark' ? '#0c1323' : '#f1f4fb';
       document.head.appendChild(meta);
     } else {
-      meta.setAttribute('content', theme === 'dark' ? '#0c111c' : '#f9fbfe');
+      meta.setAttribute('content', theme === 'dark' ? '#0c1323' : '#f1f4fb');
     }
   };
 

@@ -12,7 +12,7 @@ interface PageLayoutProps {
 
 const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
   return (
-    <div className='w-full min-h-screen'>
+    <div className='glass-app w-full min-h-screen'>
       {/* 移动端头部 */}
       <MobileHeader showBackButton={['/play'].includes(activePath)} />
 
@@ -33,20 +33,13 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
           )}
 
           {/* 桌面端顶部按钮 */}
-          <div className='absolute top-2 right-4 z-20 hidden md:flex items-center gap-2'>
+          <div className='glass-toolbar absolute top-4 right-7 z-[800] hidden md:flex items-center gap-1'>
             <ThemeToggle />
             <UserMenu />
           </div>
 
           {/* 主内容 */}
-          <main
-            className='flex-1 md:min-h-0 mb-14 md:mb-0'
-            style={{
-              paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom))',
-            }}
-          >
-            {children}
-          </main>
+          <main className='app-main flex-1 md:min-h-0'>{children}</main>
         </div>
       </div>
 

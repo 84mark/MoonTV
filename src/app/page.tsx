@@ -156,7 +156,7 @@ function HomeClient() {
 
   return (
     <PageLayout>
-      <div className='px-2 sm:px-10 py-4 sm:py-8 overflow-visible'>
+      <div className='catalog-page overflow-visible'>
         {/* 顶部 Tab 切换 */}
         <div className='mb-8 flex justify-center'>
           <CapsuleSwitch
@@ -233,7 +233,7 @@ function HomeClient() {
                       Array.from({ length: 8 }).map((_, index) => (
                         <div
                           key={index}
-                          className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                          className='min-w-[128px] w-32 sm:min-w-[180px] sm:w-44'
                         >
                           <div className='relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 animate-pulse dark:bg-gray-800'>
                             <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
@@ -245,7 +245,7 @@ function HomeClient() {
                       hotMovies.map((movie, index) => (
                         <div
                           key={index}
-                          className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                          className='min-w-[128px] w-32 sm:min-w-[180px] sm:w-44'
                         >
                           <VideoCard
                             from='douban'
@@ -281,7 +281,7 @@ function HomeClient() {
                       Array.from({ length: 8 }).map((_, index) => (
                         <div
                           key={index}
-                          className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                          className='min-w-[128px] w-32 sm:min-w-[180px] sm:w-44'
                         >
                           <div className='relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 animate-pulse dark:bg-gray-800'>
                             <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
@@ -293,7 +293,7 @@ function HomeClient() {
                       hotTvShows.map((show, index) => (
                         <div
                           key={index}
-                          className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                          className='min-w-[128px] w-32 sm:min-w-[180px] sm:w-44'
                         >
                           <VideoCard
                             from='douban'
@@ -329,7 +329,7 @@ function HomeClient() {
                       Array.from({ length: 8 }).map((_, index) => (
                         <div
                           key={index}
-                          className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                          className='min-w-[128px] w-32 sm:min-w-[180px] sm:w-44'
                         >
                           <div className='relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 animate-pulse dark:bg-gray-800'>
                             <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
@@ -341,7 +341,7 @@ function HomeClient() {
                       hotVarietyShows.map((show, index) => (
                         <div
                           key={index}
-                          className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                          className='min-w-[128px] w-32 sm:min-w-[180px] sm:w-44'
                         >
                           <VideoCard
                             from='douban'
@@ -362,13 +362,13 @@ function HomeClient() {
       </div>
       {announcement && showAnnouncement && (
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm dark:bg-black/70 p-4 transition-opacity duration-300 ${
+          className={`fixed inset-0 z-[900] flex items-center justify-center bg-black/50 backdrop-blur-sm dark:bg-black/70 p-4 transition-opacity duration-300 ${
             showAnnouncement ? '' : 'opacity-0 pointer-events-none'
           }`}
         >
-          <div className='w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900 transform transition-all duration-300 hover:shadow-2xl'>
+          <div className='glass-panel w-full max-w-md p-6 transition-all duration-300'>
             <div className='flex justify-between items-start mb-4'>
-              <h3 className='text-2xl font-bold tracking-tight text-gray-800 dark:text-white border-b border-green-500 pb-1'>
+              <h3 className='text-2xl font-bold tracking-tight text-gray-800 dark:text-white border-b border-blue-500 pb-1'>
                 提示
               </h3>
               <button
@@ -378,8 +378,8 @@ function HomeClient() {
               ></button>
             </div>
             <div className='mb-6'>
-              <div className='relative overflow-hidden rounded-lg mb-4 bg-green-50 dark:bg-green-900/20'>
-                <div className='absolute inset-y-0 left-0 w-1.5 bg-green-500 dark:bg-green-400'></div>
+              <div className='relative overflow-hidden rounded-lg mb-4 bg-blue-50 dark:bg-blue-900/20'>
+                <div className='absolute inset-y-0 left-0 w-1.5 bg-blue-500 dark:bg-blue-400'></div>
                 <p className='ml-4 text-gray-600 dark:text-gray-300 leading-relaxed'>
                   {announcement}
                 </p>
@@ -387,7 +387,7 @@ function HomeClient() {
             </div>
             <button
               onClick={() => handleCloseAnnouncement(announcement)}
-              className='w-full rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 text-white font-medium shadow-md hover:shadow-lg hover:from-green-700 hover:to-green-800 dark:from-green-600 dark:to-green-700 dark:hover:from-green-700 dark:hover:to-green-800 transition-all duration-300 transform hover:-translate-y-0.5'
+              className='w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3 text-white font-medium shadow-md hover:shadow-lg hover:from-blue-700 hover:to-blue-800 dark:from-blue-600 dark:to-blue-700 dark:hover:from-blue-700 dark:hover:to-blue-800 transition-all duration-300 transform hover:-translate-y-0.5'
             >
               我知道了
             </button>

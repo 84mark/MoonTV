@@ -205,7 +205,7 @@ function SourcesPageClient() {
   const writable = !!data?.canManage;
   return (
     <PageLayout activePath='/sources'>
-      <div className='mx-auto max-w-6xl px-4 py-16 space-y-6 text-gray-900 dark:text-gray-100'>
+      <div className='source-management mx-auto max-w-6xl px-4 py-16 space-y-6 text-gray-900 dark:text-gray-100'>
         <div>
           <h1 className='text-2xl font-bold'>视频源管理</h1>
           <p className='mt-2 text-sm text-gray-500'>
@@ -260,7 +260,7 @@ function SourcesPageClient() {
             {checking ? '检测中…' : '检测所有接口'}
           </button>
           <button
-            className='rounded bg-green-600 px-4 py-2 text-white disabled:opacity-40'
+            className='rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-40'
             disabled={!writable || !data?.configured || !dirty || saving}
             onClick={() => void save()}
           >
@@ -284,7 +284,7 @@ function SourcesPageClient() {
           JSON。接口可访问不等于每部影片可播放；超时、防护或地区限制也不等于源永久失效，不会自动删除源。
         </p>
 
-        <div className='overflow-x-auto rounded border border-gray-200 dark:border-gray-700'>
+        <div className='glass-panel source-table overflow-x-auto'>
           <table className='w-full text-left text-sm'>
             <thead className='bg-gray-100 dark:bg-gray-800'>
               <tr>
@@ -335,7 +335,7 @@ function SourcesPageClient() {
                         <div
                           className={
                             health[source.key].status === 'ok'
-                              ? 'text-green-600'
+                              ? 'text-blue-600'
                               : 'text-orange-600'
                           }
                         >
@@ -398,7 +398,7 @@ function SourcesPageClient() {
             <legend className='sr-only'>编辑共享视频源</legend>
             <form
               onSubmit={addOrEdit}
-              className='rounded border border-gray-200 dark:border-gray-700 p-4 space-y-3'
+              className='glass-panel p-5 space-y-3'
             >
               <h2 className='font-semibold'>
                 {editing ? '编辑视频源' : '添加视频源'}
@@ -476,7 +476,7 @@ function SourcesPageClient() {
               </div>
             </form>
 
-            <section className='rounded border border-gray-200 dark:border-gray-700 p-4 space-y-3'>
+            <section className='glass-panel p-5 space-y-3'>
               <h2 className='font-semibold'>从 GitHub 更新视频源</h2>
               <p className='text-sm text-gray-500'>
                 以下是第三方维护的源列表，更新状态和地区可用性不由本站保证。读取后先预览、检测，再保存；不会后台自动替换你的配置。
@@ -487,7 +487,7 @@ function SourcesPageClient() {
                   className='flex flex-wrap items-center gap-2 text-sm'
                 >
                   <a
-                    className='text-green-600 underline'
+                    className='text-blue-600 underline'
                     href={catalog.repository}
                     target='_blank'
                     rel='noreferrer'

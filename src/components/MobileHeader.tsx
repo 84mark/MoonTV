@@ -1,5 +1,6 @@
 'use client';
 
+import { Moon } from 'lucide-react';
 import Link from 'next/link';
 
 import { BackButton } from './BackButton';
@@ -14,8 +15,8 @@ interface MobileHeaderProps {
 const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
   const { siteName } = useSite();
   return (
-    <header className='md:hidden relative w-full bg-white/70 backdrop-blur-xl border-b border-gray-200/50 shadow-sm dark:bg-gray-900/70 dark:border-gray-700/50'>
-      <div className='h-12 flex items-center justify-between px-4'>
+    <header className='glass-header md:hidden relative w-full'>
+      <div className='h-16 flex items-center justify-between px-4'>
         {/* 左侧：返回按钮和设置按钮 */}
         <div className='flex items-center gap-2'>
           {showBackButton && <BackButton />}
@@ -32,8 +33,11 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
       <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'>
         <Link
           href='/'
-          className='text-2xl font-bold text-green-600 tracking-tight hover:opacity-80 transition-opacity'
+          className='app-brand flex items-center gap-2 text-xl hover:opacity-80 transition-opacity'
         >
+          <span className='brand-mark'>
+            <Moon className='h-[18px] w-[18px]' strokeWidth={1.7} />
+          </span>
           {siteName}
         </Link>
       </div>

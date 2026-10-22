@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Clover, Film, Home, Menu, Search, Star, Tv } from 'lucide-react';
+import { Clover, Film, Home, Menu, Moon, Search, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -34,9 +34,7 @@ const Logo = () => {
       href='/'
       className='flex items-center justify-center h-16 select-none hover:opacity-80 transition-opacity duration-200'
     >
-      <span className='text-2xl font-bold text-green-600 tracking-tight'>
-        {siteName}
-      </span>
+      <span className='app-brand flex items-center gap-2.5 text-xl'><span className='brand-mark'><Moon className='h-[18px] w-[18px]' strokeWidth={1.7} /></span>{siteName}</span>
     </Link>
   );
 };
@@ -162,13 +160,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
       <div className='hidden md:flex'>
         <aside
           data-sidebar
-          className={`fixed top-0 left-0 h-screen bg-white/40 backdrop-blur-xl transition-all duration-300 border-r border-gray-200/50 z-10 shadow-lg dark:bg-gray-900/70 dark:border-gray-700/50 ${
-            isCollapsed ? 'w-16' : 'w-64'
-          }`}
-          style={{
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-          }}
+          className={`glass-sidebar fixed transition-all duration-300 z-30 ${isCollapsed ? 'w-16' : 'w-56'}`}
         >
           <div className='flex h-full flex-col'>
             {/* 顶部 Logo 区域 */}
@@ -184,6 +176,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
               </div>
               <button
                 onClick={handleToggle}
+                aria-label={isCollapsed ? '展开导航' : '收起导航'}
                 className={`absolute top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 transition-colors duration-200 z-10 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700/50 ${
                   isCollapsed ? 'left-1/2 -translate-x-1/2' : 'right-2'
                 }`}
@@ -198,12 +191,12 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                 href='/'
                 onClick={() => setActive('/')}
                 data-active={active === '/'}
-                className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-gray-700 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 font-medium transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
+                className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-gray-700 hover:bg-gray-100/30 hover:text-blue-600 data-[active=true]:bg-blue-500/20 data-[active=true]:text-blue-700 font-medium transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-blue-400 dark:data-[active=true]:bg-blue-500/10 dark:data-[active=true]:text-blue-400 ${
                   isCollapsed ? 'w-full max-w-none mx-0' : 'mx-0'
                 } gap-3 justify-start`}
               >
                 <div className='w-4 h-4 flex items-center justify-center'>
-                  <Home className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
+                  <Home className='h-4 w-4 text-gray-500 group-hover:text-blue-600 data-[active=true]:text-blue-700 dark:text-gray-400 dark:group-hover:text-blue-400 dark:data-[active=true]:text-blue-400' />
                 </div>
                 {!isCollapsed && (
                   <span className='whitespace-nowrap transition-opacity duration-200 opacity-100'>
@@ -219,12 +212,12 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                   setActive('/search');
                 }}
                 data-active={active === '/search'}
-                className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-gray-700 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 font-medium transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
+                className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-gray-700 hover:bg-gray-100/30 hover:text-blue-600 data-[active=true]:bg-blue-500/20 data-[active=true]:text-blue-700 font-medium transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-blue-400 dark:data-[active=true]:bg-blue-500/10 dark:data-[active=true]:text-blue-400 ${
                   isCollapsed ? 'w-full max-w-none mx-0' : 'mx-0'
                 } gap-3 justify-start`}
               >
                 <div className='w-4 h-4 flex items-center justify-center'>
-                  <Search className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
+                  <Search className='h-4 w-4 text-gray-500 group-hover:text-blue-600 data-[active=true]:text-blue-700 dark:text-gray-400 dark:group-hover:text-blue-400 dark:data-[active=true]:text-blue-400' />
                 </div>
                 {!isCollapsed && (
                   <span className='whitespace-nowrap transition-opacity duration-200 opacity-100'>
@@ -235,7 +228,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
             </nav>
 
             {/* 菜单项 */}
-            <div className='flex-1 overflow-y-auto px-2 pt-4'>
+            <div className='sidebar-menu flex-1 overflow-y-auto px-2 pt-4'>
               <div className='space-y-1'>
                 {menuItems.map((item) => {
                   // 检查当前路径是否匹配这个菜单项
@@ -256,12 +249,12 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                       href={item.href}
                       onClick={() => setActive(item.href)}
                       data-active={isActive}
-                      className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-sm text-gray-700 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
+                      className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-sm text-gray-700 hover:bg-gray-100/30 hover:text-blue-600 data-[active=true]:bg-blue-500/20 data-[active=true]:text-blue-700 transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-blue-400 dark:data-[active=true]:bg-blue-500/10 dark:data-[active=true]:text-blue-400 ${
                         isCollapsed ? 'w-full max-w-none mx-0' : 'mx-0'
                       } gap-3 justify-start`}
                     >
                       <div className='w-4 h-4 flex items-center justify-center'>
-                        <Icon className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
+                        <Icon className='h-4 w-4 text-gray-500 group-hover:text-blue-600 data-[active=true]:text-blue-700 dark:text-gray-400 dark:group-hover:text-blue-400 dark:data-[active=true]:text-blue-400' />
                       </div>
                       {!isCollapsed && (
                         <span className='whitespace-nowrap transition-opacity duration-200 opacity-100'>
@@ -277,7 +270,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
         </aside>
         <div
           className={`transition-all duration-300 sidebar-offset ${
-            isCollapsed ? 'w-16' : 'w-64'
+            isCollapsed ? 'w-24' : 'w-64'
           }`}
         ></div>
       </div>
