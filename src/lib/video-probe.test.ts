@@ -1,8 +1,12 @@
-import Hls from 'hls.js';
+import Hls, { FetchLoader } from 'hls.js';
 
 import { getVideoResolutionFromM3u8 } from './video-probe';
 
-jest.mock('hls.js', () => ({ __esModule: true, default: jest.fn() }));
+jest.mock('hls.js', () => ({
+  __esModule: true,
+  default: jest.fn(),
+  FetchLoader: jest.fn(),
+}));
 
 interface FakeHls {
   emit: (event: string, data?: unknown) => void;
@@ -97,7 +101,7 @@ it('allows a slow playable source more than four seconds and measures real GET t
   videos[0].dispatchEvent(new Event('canplay'));
   expect(await promise).toMatchObject({
     status: 'playable',
-    loadSpeed: '64.0 KB/s',
+    loadSpeed: '61.0 KB/s',
     pingTime: 50,
     latencyKind: 'response',
   });
@@ -162,4 +166,58 @@ it('limits simultaneous media probes to three', async () => {
   await Promise.resolve();
   instance(4).emit('error', { fatal: true, type: 'network' });
   await Promise.all(promises);
+});
+
+it('includes a slow first byte instead of reporting the buffered burst as bandwidth', async () => {
+  const promise = getVideoResolutionFromM3u8(url());
+  instance().emit('fragment', {
+    payload: new Uint8Array(65536),
+    frag: { stats: { loading: { start: 100, first: 2100, end: 2100.3 } } },
+  });
+  videos[0].dispatchEvent(new Event('canplay'));
+  expect(await promise).toMatchObject({ loadSpeed: '32.0 KB/s' });
+});
+
+it.each([0, -1, NaN, Infinity])(
+  'does not invent speed from invalid duration %s',
+  async (duration) => {
+    const promise = getVideoResolutionFromM3u8(url());
+    instance().emit('fragment', {
+      payload: new Uint8Array(65536),
+      frag: {
+        stats: { loading: { start: 100, first: 100, end: 100 + duration } },
+      },
+    });
+    videos[0].dispatchEvent(new Event('canplay'));
+    jest.advanceTimersByTime(600);
+    expect(await promise).toMatchObject({
+      status: 'playable',
+      loadSpeed: '未测得',
+    });
+  }
+);
+
+it('bypasses HTTP cache while preserving signed URLs and loader request options', async () => {
+  const target = 'https://example.com/stream.m3u8?token=a%2Bb&expires=123';
+  const promise = getVideoResolutionFromM3u8(target);
+  const config = hlsConstructor.mock.calls[0][0];
+  expect(config.loader).toBe(FetchLoader);
+  const request = jest.fn();
+  const previous = global.Request;
+  global.Request = request as unknown as typeof Request;
+  try {
+    const init = {
+      headers: { Range: 'bytes=0-65535' },
+      signal: new AbortController().signal,
+    };
+    config.fetchSetup({ url: target }, init);
+    expect(request).toHaveBeenCalledWith(target, {
+      ...init,
+      cache: 'no-store',
+    });
+  } finally {
+    global.Request = previous;
+  }
+  instance().emit('error', { fatal: true, type: 'network' });
+  await promise;
 });

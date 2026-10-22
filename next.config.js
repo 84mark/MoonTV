@@ -69,7 +69,15 @@ const withPWA = require('next-pwa')({
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  // next-on-pages does not publish this internal Next.js build manifest.
+  buildExcludes: [/app-build-manifest\.json$/],
   runtimeCaching: [
+    {
+      // A probe must never fall back to Service Worker media caches either.
+      urlPattern: ({ request }) => request.cache === 'no-store',
+      handler: 'NetworkOnly',
+      method: 'GET',
+    },
     {
       // Source edits must affect the next request, even on a slow connection.
       urlPattern: ({ url }) =>

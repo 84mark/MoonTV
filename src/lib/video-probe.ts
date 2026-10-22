@@ -1,4 +1,4 @@
-import Hls from 'hls.js';
+import Hls, { FetchLoader } from 'hls.js';
 
 export interface VideoProbeResult {
   quality: string;
@@ -48,7 +48,6 @@ function probe(url: string, timeoutMs: number): Promise<VideoProbeResult> {
     let latencyKind: VideoProbeResult['latencyKind'] = null;
     let totalBytes = 0;
     let totalMilliseconds = 0;
-    let fragmentStarted = 0;
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
     const started = performance.now();
 
@@ -117,6 +116,12 @@ function probe(url: string, timeoutMs: number): Promise<VideoProbeResult> {
       // observe actual segment timings; native HLS is the fallback on iOS etc.
       if (Hls.isSupported()) {
         hls = new Hls({
+          // Bypass the browser HTTP cache without modifying signed media URLs
+          // or adding CORS-triggering headers. Cached probe results are reused
+          // separately below; reading media from RAM is not a bandwidth sample.
+          loader: FetchLoader,
+          fetchSetup: (context, initParams) =>
+            new Request(context.url, { ...initParams, cache: 'no-store' }),
           maxBufferLength: 2,
           maxMaxBufferLength: 4,
           maxBufferSize: 2 * 1024 * 1024,
@@ -130,17 +135,20 @@ function probe(url: string, timeoutMs: number): Promise<VideoProbeResult> {
             latencyKind = 'response';
           }
         });
-        hls.on(Hls.Events.FRAG_LOADING, () => {
-          fragmentStarted = performance.now();
-        });
         hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
           reachable = true;
-          const { start, first, end } = data.frag.stats.loading;
-          const duration =
-            end > first && first >= start
-              ? end - first
-              : performance.now() - fragmentStarted;
-          if (duration > 0) {
+          const { start, end } = (data.part?.stats || data.frag.stats).loading;
+          // Include the wait for the first byte. Measuring end - first can
+          // report hundreds of MB/s when a slow server buffers then bursts a
+          // whole segment in a single chunk. Invalid timings are unmeasured.
+          const duration = end - start;
+          if (
+            Number.isFinite(start) &&
+            Number.isFinite(end) &&
+            start >= 0 &&
+            duration > 0 &&
+            data.payload.byteLength > 0
+          ) {
             totalBytes += data.payload.byteLength;
             totalMilliseconds += duration;
           }
