@@ -7,6 +7,20 @@ let query = '';
 jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(query),
 }));
+jest.mock('@/lib/playback-preload', () => ({
+  preparePlayback: () => ({
+    id: 'fixture',
+    snapshot: {
+      status: 'searching',
+      sources: [],
+      results: new Map(),
+      selected: null,
+      firstSource: null,
+      completed: 0,
+    },
+    subscribe: () => () => undefined,
+  }),
+}));
 jest.mock('@/components/PageLayout', () => ({
   __esModule: true,
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,

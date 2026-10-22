@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 
 import {
   fetchDoubanJson,
+  fetchDoubanRelated,
+  fetchDoubanSubjectData,
   matchDoubanSubjects,
   validDoubanId,
 } from '@/lib/douban-comments';
@@ -14,8 +16,10 @@ export async function GET(request: Request) {
   let id = params.get('id') || '';
   const title = (params.get('title') || '').trim();
   const year = params.get('year') || '';
+  const preferredKind = params.get('kind') || '';
   const headers = { 'Cache-Control': 'private, max-age=300' };
   if (
+    (preferredKind && !['movie', 'tv'].includes(preferredKind)) ||
     (id && !validDoubanId(id)) ||
     (!id && (!title || title.length > 200)) ||
     (year && !/^\d{4}$/.test(year))
@@ -42,16 +46,13 @@ export async function GET(request: Request) {
         );
       id = result.subject.id;
     }
-    const subject = parseDoubanSubject(
-      await fetchDoubanJson(`https://m.douban.com/rexxar/api/v2/movie/${id}`),
-      id
-    );
+    const { data, kind } = await fetchDoubanSubjectData(id, preferredKind);
+    const subject = parseDoubanSubject(data, id);
+    subject.kind = kind;
     // Missing photos must never hide the synopsis or prevent playback.
     try {
       subject.photos = parseDoubanPhotos(
-        await fetchDoubanJson(
-          `https://m.douban.com/rexxar/api/v2/movie/${id}/photos?count=12&start=0&type=S`
-        )
+        await fetchDoubanRelated(id, kind, 'photos', 'count=12&start=0&type=S')
       );
     } catch {
       /* Optional gallery. */

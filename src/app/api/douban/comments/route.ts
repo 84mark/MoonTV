@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import type { DoubanSubject } from '@/lib/douban-comments';
 import {
   fetchDoubanJson,
+  fetchDoubanRelated,
+  fetchDoubanSubjectData,
   matchDoubanSubjects,
   parseDoubanComments,
   validDoubanId,
@@ -16,7 +18,9 @@ export async function GET(request: Request) {
   const title = (params.get('title') || '').trim();
   const year = params.get('year') || '';
   const offset = params.get('start') || '0';
+  const preferredKind = params.get('kind') || '';
   if (
+    (preferredKind && !['movie', 'tv'].includes(preferredKind)) ||
     (id && !validDoubanId(id)) ||
     (!id && (!title || title.length > 200)) ||
     (year && !/^\d{4}$/.test(year)) ||
@@ -33,15 +37,12 @@ export async function GET(request: Request) {
     let subject: DoubanSubject | null = null;
     let candidates: DoubanSubject[] = [];
     if (id) {
-      const data = (await fetchDoubanJson(
-        `https://m.douban.com/rexxar/api/v2/movie/${id}`
-      )) as Partial<DoubanSubject>;
-      if (data.id !== id || typeof data.title !== 'string')
-        throw new Error('未找到对应豆瓣影片');
+      const { data, kind } = await fetchDoubanSubjectData(id, preferredKind);
       subject = {
         id,
-        title: data.title.slice(0, 200),
+        title: String(data.title).slice(0, 200),
         year: String(data.year || '').slice(0, 20),
+        kind,
       };
     } else {
       ({ subject, candidates } = matchDoubanSubjects(
@@ -59,10 +60,12 @@ export async function GET(request: Request) {
         { subject, candidates, comments: [], nextStart: null },
         { headers: { 'Cache-Control': 'no-store' } }
       );
-    const data = await fetchDoubanJson(
-      `https://m.douban.com/rexxar/api/v2/movie/${
-        subject.id
-      }/interests?count=20&start=${Number(offset)}&order_by=hot&status=done`
+    const kind = subject.kind || (preferredKind === 'tv' ? 'tv' : 'movie');
+    const data = await fetchDoubanRelated(
+      subject.id,
+      kind,
+      'interests',
+      `count=20&start=${Number(offset)}&order_by=hot&status=done`
     );
     return NextResponse.json(
       { subject, candidates: [], ...parseDoubanComments(data, Number(offset)) },

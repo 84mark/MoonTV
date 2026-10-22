@@ -9,10 +9,12 @@ export default function DoubanComments({
   title,
   year,
   doubanId,
+  kind,
 }: {
   title: string;
   year: string;
   doubanId: string;
+  kind?: string;
 }) {
   const [selection, setSelection] = useState('');
   const [result, setResult] = useState<DoubanCommentsResult | null>(null);
@@ -20,7 +22,7 @@ export default function DoubanComments({
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const controller = useRef<AbortController | null>(null);
-  const identity = `${title}\0${year}\0${doubanId}`;
+  const identity = `${title}\0${year}\0${doubanId}\0${kind || ''}`;
   const previousIdentity = useRef(identity);
   const id = validDoubanId(selection)
     ? selection
@@ -38,6 +40,9 @@ export default function DoubanComments({
     if (/^\d{4}$/.test(year)) params.set('year', year);
     const subjectId = append ? result?.subject?.id : id;
     if (subjectId) params.set('id', subjectId);
+    const contentKind = result?.subject?.kind || kind;
+    if (contentKind === 'tv' || contentKind === 'movie')
+      params.set('kind', contentKind);
     try {
       const response = await fetch(`/api/douban/comments?${params}`, {
         signal: current.signal,

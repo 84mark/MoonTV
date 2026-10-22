@@ -42,6 +42,7 @@ export function parseDoubanSubject(
       : '';
   return {
     id,
+    kind: data.type === 'tv' || data.is_tv === true ? 'tv' : 'movie',
     title: data.title.slice(0, 200),
     year: String(data.year || '').slice(0, 20),
     intro: typeof data.intro === 'string' ? data.intro.slice(0, 10000) : '',

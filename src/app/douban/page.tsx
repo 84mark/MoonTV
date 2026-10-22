@@ -425,6 +425,7 @@ function DoubanPageClient() {
                   <div key={`${item.title}-${index}`} className='w-full'>
                     <VideoCard
                       from='douban'
+                      doubanType={type === 'movie' ? 'movie' : 'tv'}
                       title={item.title}
                       poster={item.poster}
                       douban_id={item.id}

@@ -9,6 +9,11 @@ import type { DoubanSubject } from '@/lib/douban-comments';
 import { validDoubanId } from '@/lib/douban-comments';
 import type { DoubanSubjectDetail } from '@/lib/douban-subject';
 import { getBuiltinImageProxyUrl } from '@/lib/image-proxy';
+import type {
+  PlaybackPreparation,
+  PlaybackPreparationState,
+} from '@/lib/playback-preload';
+import { preparePlayback } from '@/lib/playback-preload';
 import type { SearchResult } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 
@@ -27,6 +32,19 @@ function DetailPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const [probeRetry, setProbeRetry] = useState(0);
+  const [preparation, setPreparation] = useState<PlaybackPreparation | null>(
+    null
+  );
+  const [prepared, setPrepared] = useState<PlaybackPreparationState | null>(
+    null
+  );
+  useEffect(() => {
+    const session = preparePlayback(query, probeRetry > 0);
+    setPreparation(session);
+    setPrepared(session.snapshot);
+    return session.subscribe(setPrepared);
+  }, [query, probeRetry]);
 
   useEffect(() => {
     setChosenId('');
@@ -69,6 +87,9 @@ function DetailPageClient() {
       const request = new URLSearchParams({
         title: title || fallback?.title || '',
       });
+      const contentKind = params.get('douban_type') || params.get('stype');
+      if (contentKind === 'tv' || contentKind === 'movie')
+        request.set('kind', contentKind);
       const releaseYear = year || fallback?.year || '';
       if (/^\d{4}$/.test(releaseYear)) request.set('year', releaseYear);
       if (validDoubanId(supplied)) request.set('id', supplied);
@@ -119,6 +140,17 @@ function DetailPageClient() {
   const playParams = new URLSearchParams(query);
   if (validDoubanId(chosenId)) playParams.set('douban_id', chosenId);
   else if (subject) playParams.set('douban_id', subject.id);
+  if (subject?.kind) playParams.set('douban_type', subject.kind);
+  if (preparation) playParams.set('preload', preparation.id);
+  if (prepared?.selected) {
+    playParams.set('source', prepared.selected.source);
+    playParams.set('id', prepared.selected.id);
+    playParams.set('title', prepared.selected.title);
+    playParams.set('year', prepared.selected.year);
+    playParams.delete('prefer');
+  }
+  const noPlayableSource =
+    prepared?.status === 'complete' && !prepared.selected;
   const playbackLink = `/play?${playParams}`;
 
   return (
@@ -187,12 +219,58 @@ function DetailPageClient() {
                 主演：{subject.actors.join(' / ')}
               </p>
             ) : null}
-            <Link
-              href={playbackLink}
-              className='mt-6 inline-flex items-center gap-2 rounded-xl bg-green-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-green-700'
-            >
-              ▶ 立即播放
-            </Link>
+            {noPlayableSource ? (
+              <button
+                disabled
+                className='mt-6 inline-flex items-center gap-2 rounded-xl bg-gray-300 px-7 py-3 font-semibold text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+              >
+                ▶ 暂无可用片源
+              </button>
+            ) : (
+              <Link
+                href={playbackLink}
+                className='mt-6 inline-flex items-center gap-2 rounded-xl bg-green-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-green-700'
+              >
+                ▶ 立即播放
+              </Link>
+            )}
+            <div className='mt-3 text-xs text-gray-500' aria-live='polite'>
+              {noPlayableSource ? (
+                <>
+                  <span>当前所有源均不可用</span>
+                  <button
+                    onClick={() => setProbeRetry((value) => value + 1)}
+                    className='ml-3 text-green-600 hover:underline'
+                  >
+                    重新检测
+                  </button>
+                </>
+              ) : prepared?.selected ? (
+                <span>
+                  {prepared.status === 'complete'
+                    ? '测速完成，将使用最快片源'
+                    : '已找到可播放片源，其余检测中'}
+                  ：{prepared.selected.source_name}
+                </span>
+              ) : prepared?.status === 'error' ? (
+                <>
+                  <span>预检测暂未完成，可直接播放</span>
+                  <button
+                    onClick={() => setProbeRetry((value) => value + 1)}
+                    className='ml-3 text-green-600 hover:underline'
+                  >
+                    重新检测
+                  </button>
+                </>
+              ) : (
+                <span>
+                  {prepared?.status === 'testing'
+                    ? `正在测速 ${prepared.completed}/${prepared.sources.length}`
+                    : '正在查找片源…'}
+                  ，可直接进入播放
+                </span>
+              )}
+            </div>
             <p className='mt-3 text-xs text-gray-500'>
               进入播放页后可选择剧集、切换片源。
             </p>
@@ -286,6 +364,7 @@ function DetailPageClient() {
             title={subject.title}
             year={subject.year}
             doubanId={subject.id}
+            kind={subject.kind}
           />
         )}
       </div>

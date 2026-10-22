@@ -297,6 +297,7 @@ function HomeClient() {
                         >
                           <VideoCard
                             from='douban'
+                            doubanType='tv'
                             title={show.title}
                             poster={show.poster}
                             douban_id={show.id}
@@ -344,6 +345,7 @@ function HomeClient() {
                         >
                           <VideoCard
                             from='douban'
+                            doubanType='tv'
                             title={show.title}
                             poster={show.poster}
                             douban_id={show.id}

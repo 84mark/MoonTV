@@ -36,6 +36,7 @@ interface VideoCardProps {
   rate?: string;
   items?: SearchResult[];
   type?: string;
+  doubanType?: 'movie' | 'tv';
 }
 
 export default function VideoCard({
@@ -55,6 +56,7 @@ export default function VideoCard({
   rate,
   items,
   type = '',
+  doubanType,
 }: VideoCardProps) {
   const router = useRouter();
   const [favorited, setFavorited] = useState(false);
@@ -205,8 +207,9 @@ export default function VideoCard({
   );
 
   const handleClick = useCallback(() => {
+    const contentKind = doubanType || (actualSearchType === 'tv' || (actualEpisodes || 0) > 1 ? 'tv' : 'movie');
     const doubanQuery = /^\d{5,12}$/.test(actualDoubanId)
-      ? `&douban_id=${actualDoubanId}`
+      ? `&douban_id=${actualDoubanId}&douban_type=${contentKind}`
       : '';
     if (from === 'douban') {
       router.push(
@@ -237,6 +240,8 @@ export default function VideoCard({
     actualSearchType,
     actualDoubanId,
     actualPoster,
+    doubanType,
+    actualEpisodes,
   ]);
 
   const config = useMemo(() => {

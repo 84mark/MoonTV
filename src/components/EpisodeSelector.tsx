@@ -9,6 +9,7 @@ import React, {
   useState,
 } from 'react';
 
+import { speedKBps } from '@/lib/source-selection';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/utils';
 import type { VideoProbeResult } from '@/lib/video-probe';
@@ -60,6 +61,7 @@ interface EpisodeSelectorProps {
   sourceSearchError?: string | null;
   /** 预计算的测速结果，避免重复测速 */
   precomputedVideoInfo?: Map<string, VideoInfo>;
+  onAllSourcesUnavailable?: () => void;
 }
 
 /**
@@ -78,6 +80,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   sourceSearchLoading = false,
   sourceSearchError = null,
   precomputedVideoInfo,
+  onAllSourcesUnavailable,
 }) => {
   const router = useRouter();
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
@@ -89,6 +92,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const [attemptedSources, setAttemptedSources] = useState<Set<string>>(
     new Set()
   );
+
+  const [completedSources, setCompletedSources] = useState<Set<string>>(new Set());
 
   // 使用 ref 来避免闭包问题
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
@@ -133,17 +138,15 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       return;
     }
 
-    // 获取第一集的URL
-    if (!source.episodes || source.episodes.length === 0) {
-      return;
-    }
-    const episodeUrl = source.episodes[0];
+    const episodeUrl = source.episodes?.[0];
+    setCompletedSources((previous) => { const next = new Set(previous); next.delete(sourceKey); return next; });
 
     // 标记为已尝试
     setAttemptedSources((prev) => new Set(prev).add(sourceKey));
     attemptedSourcesRef.current.add(sourceKey);
 
     try {
+      if (!episodeUrl) throw new Error('Missing playlist');
       const info = await getVideoResolutionFromM3u8(episodeUrl, { force });
       setVideoInfoMap((prev) => {
         const current = prev.get(sourceKey);
@@ -160,16 +163,22 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           message: '预检未完成，可直接尝试播放',
         })
       );
+    } finally {
+      setCompletedSources((previous) => new Set(previous).add(sourceKey));
     }
   }, []);
+
+  const previousPrecomputed = useRef<Map<string, VideoInfo>>(new Map());
 
   // 当有预计算结果时，先合并到videoInfoMap中
   useEffect(() => {
     if (precomputedVideoInfo && precomputedVideoInfo.size > 0) {
-      // 原子性地更新两个状态，避免时序问题
+      const updates = new Map(Array.from(precomputedVideoInfo).filter(([key, info]) => previousPrecomputed.current.get(key) !== info));
+      previousPrecomputed.current = new Map(precomputedVideoInfo);
+      // Do not replay stale measurements when a different background probe completes.
       setVideoInfoMap((prev) => {
         const newMap = new Map(prev);
-        precomputedVideoInfo.forEach((value, key) => {
+        updates.forEach((value, key) => {
           newMap.set(key, mergeVideoInfo(newMap.get(key), value));
         });
         return newMap;
@@ -177,17 +186,25 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
       setAttemptedSources((prev) => {
         const newSet = new Set(prev);
-        precomputedVideoInfo.forEach((info, key) => {
-          if (!info.hasError && (info.pingTime > 0 || !['未知', '未测得'].includes(info.loadSpeed))) {
+        updates.forEach((info, key) => {
+          if (info.message !== '当前播放器已确认可播放' || speedKBps(info.loadSpeed) > 0) {
             newSet.add(key);
           }
         });
         return newSet;
       });
 
+      setCompletedSources((previous) => {
+        const next = new Set(previous);
+        updates.forEach((info, key) => {
+          if (info.message !== '当前播放器已确认可播放' || speedKBps(info.loadSpeed) > 0) next.add(key);
+        });
+        return next;
+      });
+
       // 同步更新 ref，确保 getVideoInfo 能立即看到更新
-      precomputedVideoInfo.forEach((info, key) => {
-        if (!info.hasError && (info.pingTime > 0 || !['未知', '未测得'].includes(info.loadSpeed))) {
+      updates.forEach((info, key) => {
+        if (info.message !== '当前播放器已确认可播放' || speedKBps(info.loadSpeed) > 0) {
           attemptedSourcesRef.current.add(key);
         }
       });
@@ -214,7 +231,6 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     const fetchVideoInfosInBatches = async () => {
       if (
         !optimizationEnabled || // 若关闭测速则直接退出
-        activeTab !== 'sources' ||
         availableSources.length === 0
       )
         return;
@@ -227,17 +243,22 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
       if (pendingSources.length === 0) return;
 
-      const batchSize = 3;
-
-      for (let start = 0; start < pendingSources.length; start += batchSize) {
-        const batch = pendingSources.slice(start, start + batchSize);
-        await Promise.all(batch.map(source => getVideoInfo(source)));
-      }
+      // The shared probe queue limits concurrency to three without waiting for a whole batch.
+      await Promise.all(pendingSources.map((source) => getVideoInfo(source)));
     };
 
     fetchVideoInfosInBatches();
     // 依赖项保持与之前一致
   }, [activeTab, availableSources, getVideoInfo, optimizationEnabled]);
+
+  const checksComplete = optimizationEnabled && availableSources.length > 0 && availableSources.every((source) => completedSources.has(`${source.source}-${source.id}`));
+  const visibleSources = [...availableSources]
+    .filter((source) => !checksComplete || speedKBps(videoInfoMap.get(`${source.source}-${source.id}`)?.loadSpeed) > 0)
+    .sort((a, b) => speedKBps(videoInfoMap.get(`${b.source}-${b.id}`)?.loadSpeed) - speedKBps(videoInfoMap.get(`${a.source}-${a.id}`)?.loadSpeed));
+
+  useEffect(() => {
+    if (checksComplete && visibleSources.length === 0) onAllSourcesUnavailable?.();
+  }, [checksComplete, visibleSources.length, onAllSourcesUnavailable]);
 
   // 升序分页标签
   const categoriesAsc = useMemo(() => {
@@ -447,8 +468,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       {activeTab === 'sources' && (
         <div className='flex flex-col h-full mt-4'>
           <div className='mb-3 flex items-center justify-between gap-2 text-xs text-gray-500'>
-            <span>首集采样；未测得速度不代表不可播放</span>
-            <button className='shrink-0 text-green-600' onClick={() => { void Promise.all(availableSources.map(source => getVideoInfo(source, true))); }}>重新检测</button>
+            <span>{checksComplete ? '首集采样 · 按速度从快到慢排序' : optimizationEnabled ? '首集采样 · 检测完成后隐藏无速度的源' : '测速已关闭'}</span>
+            <button disabled={optimizationEnabled && !checksComplete} className='shrink-0 text-green-600 disabled:opacity-40' onClick={() => { setVideoInfoMap(new Map()); setCompletedSources(new Set()); void Promise.all(availableSources.map(source => getVideoInfo(source, true))); }}>重新检测</button>
           </div>
           {sourceSearchLoading && (
             <div className='flex items-center justify-center py-8'>
@@ -483,22 +504,13 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               </div>
             )}
 
+          {checksComplete && visibleSources.length === 0 && <p role='status' className='py-8 text-center text-sm text-gray-500'>当前所有源均不可用</p>}
+
           {!sourceSearchLoading &&
             !sourceSearchError &&
             availableSources.length > 0 && (
               <div className='flex-1 overflow-y-auto space-y-2 pb-20'>
-                {[...availableSources]
-                  .sort((a, b) => {
-                    const aIsCurrent =
-                      a.source?.toString() === currentSource?.toString() &&
-                      a.id?.toString() === currentId?.toString();
-                    const bIsCurrent =
-                      b.source?.toString() === currentSource?.toString() &&
-                      b.id?.toString() === currentId?.toString();
-                    if (aIsCurrent && !bIsCurrent) return -1;
-                    if (!aIsCurrent && bIsCurrent) return 1;
-                    return 0;
-                  })
+                {visibleSources
                   .map((source) => {
                     const sourceKey = `${source.source}-${source.id}`;
                     const info = videoInfoMap.get(sourceKey);

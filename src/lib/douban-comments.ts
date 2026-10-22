@@ -2,6 +2,7 @@ export interface DoubanSubject {
   id: string;
   title: string;
   year: string;
+  kind?: 'movie' | 'tv';
 }
 export interface DoubanComment {
   id: string;
@@ -117,13 +118,22 @@ export async function fetchDoubanJson(url: string): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
   try {
+    const target = new URL(url);
+    const subject = target.pathname.match(/\/(movie|tv)\/(\d+)/);
+    const referer =
+      target.hostname === 'movie.douban.com'
+        ? 'https://movie.douban.com/'
+        : subject
+        ? `https://m.douban.com/${subject[1]}/subject/${subject[2]}/`
+        : 'https://m.douban.com/';
     const response = await fetch(url, {
       signal: controller.signal,
       redirect: 'manual',
       cache: 'no-store',
       headers: {
-        Referer: 'https://m.douban.com/',
-        'User-Agent': 'Mozilla/5.0',
+        Referer: referer,
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         Accept: 'application/json',
       },
     });
@@ -153,4 +163,58 @@ export async function fetchDoubanJson(url: string): Promise<unknown> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function fetchDoubanSubjectData(
+  id: string,
+  preferred?: string
+): Promise<{ data: Record<string, unknown>; kind: 'movie' | 'tv' }> {
+  const kinds: ('movie' | 'tv')[] =
+    preferred === 'tv' ? ['tv', 'movie'] : ['movie', 'tv'];
+  for (const endpoint of kinds) {
+    try {
+      const data = await fetchDoubanJson(
+        `https://m.douban.com/rexxar/api/v2/${endpoint}/${id}`
+      );
+      if (!data || typeof data !== 'object') continue;
+      const value = data as Record<string, unknown>;
+      if (String(value.id) !== id || typeof value.title !== 'string') continue;
+      return {
+        data: value,
+        kind:
+          value.type === 'tv' || value.is_tv === true
+            ? 'tv'
+            : value.type === 'movie'
+            ? 'movie'
+            : endpoint,
+      };
+    } catch {
+      /* Try the other public subject endpoint, never a challenge page. */
+    }
+  }
+  throw new Error('豆瓣影片资料暂不可用');
+}
+
+export async function fetchDoubanRelated(
+  id: string,
+  kind: 'movie' | 'tv',
+  field: 'interests' | 'photos',
+  query: string
+): Promise<unknown> {
+  for (const endpoint of [kind, kind === 'tv' ? 'movie' : 'tv']) {
+    try {
+      const data = await fetchDoubanJson(
+        `https://m.douban.com/rexxar/api/v2/${endpoint}/${id}/${field}?${query}`
+      );
+      if (
+        data &&
+        typeof data === 'object' &&
+        Array.isArray((data as Record<string, unknown>)[field])
+      )
+        return data;
+    } catch {
+      /* Compatibility fallback for public endpoints. */
+    }
+  }
+  throw new Error('豆瓣内容暂不可用');
 }
