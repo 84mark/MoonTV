@@ -76,6 +76,7 @@ const withPWA = require('next-pwa')({
         /^\/api\/(?:search(?:\/|$)|detail$|sources(?:\/|$))/.test(url.pathname),
       handler: 'NetworkOnly',
       method: 'GET',
+      options: { fetchOptions: { cache: 'no-store' } },
     },
     ...require('next-pwa/cache'),
   ],

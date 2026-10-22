@@ -593,7 +593,8 @@ function PlayPageClient() {
     ): Promise<SearchResult[]> => {
       try {
         const detailResponse = await fetch(
-          `/api/detail?source=${source}&id=${id}`
+          `/api/detail?source=${source}&id=${id}`,
+          { cache: 'no-store' }
         );
         if (!detailResponse.ok) {
           throw new Error('获取视频详情失败');
@@ -612,7 +613,8 @@ function PlayPageClient() {
       // 根据搜索词获取全部源信息
       try {
         const response = await fetch(
-          `/api/search?q=${encodeURIComponent(query.trim())}`
+          `/api/search?q=${encodeURIComponent(query.trim())}`,
+          { cache: 'no-store' }
         );
         if (!response.ok) {
           throw new Error('搜索失败');
