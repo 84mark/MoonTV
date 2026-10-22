@@ -13,6 +13,7 @@ import {
   saveFavorite,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { getBuiltinImageProxyUrl } from '@/lib/image-proxy';
 import { SearchResult } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 
@@ -58,6 +59,7 @@ export default function VideoCard({
   const router = useRouter();
   const [favorited, setFavorited] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [failedPosterSrc, setFailedPosterSrc] = useState<string | null>(null);
 
   const isAggregate = from === 'search' && !!items?.length;
 
@@ -98,6 +100,13 @@ export default function VideoCard({
 
   const actualTitle = aggregateData?.first.title ?? title;
   const actualPoster = aggregateData?.first.poster ?? poster;
+  const posterSrc = processImageUrl(actualPoster);
+  // A previously saved custom proxy may no longer work. Retry Douban posters
+  // through this site's endpoint once, without looping on permanent errors.
+  const imageSrc =
+    failedPosterSrc === posterSrc
+      ? getBuiltinImageProxyUrl(actualPoster) || posterSrc
+      : posterSrc;
   const actualSource = aggregateData?.first.source ?? source;
   const actualId = aggregateData?.first.id ?? id;
   const actualDoubanId = String(
@@ -278,12 +287,17 @@ export default function VideoCard({
         {!isLoading && <ImagePlaceholder aspectRatio='aspect-[2/3]' />}
         {/* 图片 */}
         <Image
-          src={processImageUrl(actualPoster)}
+          src={imageSrc}
           alt={actualTitle}
           fill
           className='object-cover'
           referrerPolicy='no-referrer'
           onLoadingComplete={() => setIsLoading(true)}
+          onError={() => {
+            if (imageSrc !== getBuiltinImageProxyUrl(actualPoster)) {
+              setFailedPosterSrc(posterSrc);
+            }
+          }}
         />
 
         {/* 悬浮遮罩 */}

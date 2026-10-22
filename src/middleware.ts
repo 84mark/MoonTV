@@ -117,6 +117,9 @@ function handleAuthFailure(
 
 // 判断是否需要跳过认证的路径
 function shouldSkipAuth(pathname: string): boolean {
+  // This endpoint serves only allowlisted public posters, without user data.
+  if (pathname === '/api/image') return true;
+
   const skipPaths = [
     '/_next',
     '/favicon.ico',

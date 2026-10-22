@@ -2,16 +2,18 @@
 
 import Hls from 'hls.js';
 
+import { getBuiltinImageProxyUrl } from '@/lib/image-proxy';
+
 /**
- * 获取图片代理 URL 设置
+ * 获取自定义图片代理 URL 设置（内置豆瓣海报代理独立生效）
  */
 export function getImageProxyUrl(): string | null {
   if (typeof window === 'undefined') return null;
 
-  // 本地未开启图片代理，则不使用代理
+  // 本地未开启自定义图片代理时，仍可使用内置豆瓣海报代理
   const enableImageProxy = localStorage.getItem('enableImageProxy');
   if (enableImageProxy !== null) {
-    if (!JSON.parse(enableImageProxy) as boolean) {
+    if (enableImageProxy === 'false') {
       return null;
     }
   }
@@ -35,7 +37,7 @@ export function processImageUrl(originalUrl: string): string {
   if (!originalUrl) return originalUrl;
 
   const proxyUrl = getImageProxyUrl();
-  if (!proxyUrl) return originalUrl;
+  if (!proxyUrl) return getBuiltinImageProxyUrl(originalUrl) || originalUrl;
 
   return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
 }

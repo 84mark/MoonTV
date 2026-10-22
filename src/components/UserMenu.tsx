@@ -571,10 +571,10 @@ export const UserMenu: React.FC = () => {
           <div className='flex items-center justify-between'>
             <div>
               <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
-                启用图片代理
+                启用自定义图片代理
               </h4>
               <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
-                启用后，所有图片加载将通过代理服务器
+                豆瓣海报默认由本站加载；启用后可优先使用自定义代理
               </p>
             </div>
             <label className='flex items-center cursor-pointer'>
