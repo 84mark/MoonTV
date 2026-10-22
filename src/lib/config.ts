@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, no-console, @typescript-eslint/no-non-null-assertion */
 
 import { getStorage } from '@/lib/db';
+import { getSourceDatabase, readSourceSettings } from '@/lib/source-store';
 
 import { AdminConfig } from './admin.types';
 import runtimeConfig from './runtime';
@@ -276,7 +277,7 @@ async function initConfig() {
   }
 }
 
-export async function getConfig(): Promise<AdminConfig> {
+async function getBaseConfig(): Promise<AdminConfig> {
   const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
   if (process.env.DOCKER_ENV === 'true' || storageType === 'localstorage') {
     await initConfig();
@@ -385,6 +386,12 @@ export async function getConfig(): Promise<AdminConfig> {
   return cachedConfig;
 }
 
+export async function getConfig(): Promise<AdminConfig> {
+  const config = await getBaseConfig();
+  const shared = await readSourceSettings();
+  return shared ? { ...config, SourceConfig: shared.sources } : config;
+}
+
 export async function resetConfig() {
   const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
   const storage = getStorage();
@@ -481,6 +488,16 @@ export async function resetConfig() {
 export async function getCacheTime(): Promise<number> {
   const config = await getConfig();
   return config.SiteConfig.SiteInterfaceCacheTime || 7200;
+}
+
+export function sourceCacheHeaders(cacheTime: number): Record<string, string> {
+  return getSourceDatabase()
+    ? { 'Cache-Control': 'no-store' }
+    : {
+        'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
+        'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+        'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+      };
 }
 
 export async function getAvailableApiSites(): Promise<ApiSite[]> {

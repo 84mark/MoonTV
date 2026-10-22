@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getCacheTime, getConfig } from '@/lib/config';
+import { getCacheTime, getConfig, sourceCacheHeaders } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { yellowWords } from '@/lib/yellow';
 
@@ -15,18 +15,14 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { results: [] },
       {
-        headers: {
-          'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-          'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-        },
+        headers: sourceCacheHeaders(cacheTime),
       }
     );
   }
 
   const config = await getConfig();
   const apiSites = config.SourceConfig.filter((site) => !site.disabled);
-  const searchPromises = apiSites.map((site) => searchFromApi(site, query));
+  const searchPromises = apiSites.map((site) => searchFromApi(site, query, config.SiteConfig.SearchDownstreamMaxPage));
 
   try {
     const results = await Promise.all(searchPromises);
@@ -42,11 +38,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { results: flattenedResults },
       {
-        headers: {
-          'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-          'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-        },
+        headers: sourceCacheHeaders(cacheTime),
       }
     );
   } catch (error) {

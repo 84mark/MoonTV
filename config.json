@@ -2,9 +2,9 @@
   "cache_time": 7200,
   "api_site": {
     "dyttzy": {
-      "api": "http://caiji.dyttzyapi.com/api.php/provide/vod",
+      "api": "https://caiji.dyttzyapi.com/api.php/provide/vod",
       "name": "电影天堂资源",
-      "detail": "http://caiji.dyttzyapi.com"
+      "detail": "https://caiji.dyttzyapi.com"
     },
     "heimuer": {
       "api": "https://json.heimuer.xyz/api.php/provide/vod",
@@ -12,7 +12,7 @@
       "detail": "https://heimuer.tv"
     },
     "ruyi": {
-      "api": "http://cj.rycjapi.com/api.php/provide/vod",
+      "api": "https://cj.rycjapi.com/api.php/provide/vod",
       "name": "如意资源"
     },
     "bfzy": {
@@ -24,9 +24,9 @@
       "name": "天涯资源"
     },
     "ffzy": {
-      "api": "http://ffzy5.tv/api.php/provide/vod",
+      "api": "https://ffzy5.tv/api.php/provide/vod",
       "name": "非凡影视",
-      "detail": "http://ffzy5.tv"
+      "detail": "https://ffzy5.tv"
     },
     "zy360": {
       "api": "https://360zy.com/api.php/provide/vod",

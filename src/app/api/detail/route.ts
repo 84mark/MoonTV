@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getAvailableApiSites, getCacheTime } from '@/lib/config';
+import { getAvailableApiSites, getCacheTime, sourceCacheHeaders } from '@/lib/config';
 import { getDetailFromApi } from '@/lib/downstream';
 
 export const runtime = 'edge';
@@ -30,11 +30,7 @@ export async function GET(request: Request) {
     const cacheTime = await getCacheTime();
 
     return NextResponse.json(result, {
-      headers: {
-        'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-        'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-        'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-      },
+      headers: sourceCacheHeaders(cacheTime),
     });
   } catch (error) {
     return NextResponse.json(

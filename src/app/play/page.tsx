@@ -23,6 +23,7 @@ import {
 } from '@/lib/db.client';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
+import { qualityForWidth, VideoProbeResult } from '@/lib/video-probe';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
@@ -174,7 +175,7 @@ function PlayPageClient() {
 
   // 保存优选时的测速结果，避免EpisodeSelector重复测速
   const [precomputedVideoInfo, setPrecomputedVideoInfo] = useState<
-    Map<string, { quality: string; loadSpeed: string; pingTime: number }>
+    Map<string, VideoProbeResult>
   >(new Map());
 
   // 折叠状态（仅在 lg 及以上屏幕有效）
@@ -205,14 +206,15 @@ function PlayPageClient() {
     if (sources.length === 1) return sources[0];
 
     // 将播放源均分为两批，并发测速各批，避免一次性过多请求
-    const batchSize = Math.ceil(sources.length / 2);
+    const candidates = sources.slice(0, 3);
+    const batchSize = 3;
     const allResults: Array<{
       source: SearchResult;
-      testResult: { quality: string; loadSpeed: string; pingTime: number };
+      testResult: VideoProbeResult;
     } | null> = [];
 
-    for (let start = 0; start < sources.length; start += batchSize) {
-      const batchSources = sources.slice(start, start + batchSize);
+    for (let start = 0; start < candidates.length; start += batchSize) {
+      const batchSources = candidates.slice(start, start + batchSize);
       const batchResults = await Promise.all(
         batchSources.map(async (source) => {
           try {
@@ -223,10 +225,8 @@ function PlayPageClient() {
             }
 
             const episodeUrl =
-              source.episodes.length > 1
-                ? source.episodes[1]
-                : source.episodes[0];
-            const testResult = await getVideoResolutionFromM3u8(episodeUrl);
+              source.episodes[0];
+            const testResult = await getVideoResolutionFromM3u8(episodeUrl, { timeoutMs: 8000 });
 
             return {
               source,
@@ -242,15 +242,7 @@ function PlayPageClient() {
 
     // 等待所有测速完成，包含成功和失败的结果
     // 保存所有测速结果到 precomputedVideoInfo，供 EpisodeSelector 使用（包含错误结果）
-    const newVideoInfoMap = new Map<
-      string,
-      {
-        quality: string;
-        loadSpeed: string;
-        pingTime: number;
-        hasError?: boolean;
-      }
-    >();
+    const newVideoInfoMap = new Map<string, VideoProbeResult>();
     allResults.forEach((result, index) => {
       const source = sources[index];
       const sourceKey = `${source.source}-${source.id}`;
@@ -262,9 +254,9 @@ function PlayPageClient() {
     });
 
     // 过滤出成功的结果用于优选计算
-    const successfulResults = allResults.filter(Boolean) as Array<{
+    const successfulResults = allResults.filter(result => result?.testResult.status === 'playable') as Array<{
       source: SearchResult;
-      testResult: { quality: string; loadSpeed: string; pingTime: number };
+      testResult: VideoProbeResult;
     }>;
 
     setPrecomputedVideoInfo(newVideoInfoMap);
@@ -1270,6 +1262,10 @@ function PlayPageClient() {
             if (video.hls) {
               video.hls.destroy();
             }
+            if (!Hls.isSupported() && video.canPlayType('application/vnd.apple.mpegurl')) {
+              video.src = url;
+              return;
+            }
             const hls = new Hls({
               debug: false, // 关闭日志
               enableWorker: true, // WebWorker 解码，降低主线程压力
@@ -1441,6 +1437,19 @@ function PlayPageClient() {
 
       // 监听视频可播放事件，这时恢复播放进度更可靠
       artPlayerRef.current.on('video:canplay', () => {
+        const sourceKey = `${currentSourceRef.current}-${currentIdRef.current}`;
+        const width = artPlayerRef.current.video.videoWidth;
+        setPrecomputedVideoInfo(previous => {
+          const measured = previous.get(sourceKey);
+          return new Map(previous).set(sourceKey, {
+            quality: width ? qualityForWidth(width) : measured?.quality || '未知',
+            loadSpeed: measured?.loadSpeed || '未测得',
+            pingTime: measured?.pingTime || 0,
+            latencyKind: measured?.latencyKind || null,
+            status: 'playable',
+            message: '当前播放器已确认可播放',
+          });
+        });
         // 若存在需要恢复的播放进度，则跳转
         if (resumeTimeRef.current && resumeTimeRef.current > 0) {
           try {

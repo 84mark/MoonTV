@@ -354,6 +354,13 @@ export const UserMenu: React.FC = () => {
 
         {/* 菜单项 */}
         <div className='py-1'>
+          <button
+            onClick={() => { setIsOpen(false); router.push('/sources'); }}
+            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm'
+          >
+            <Settings className='w-4 h-4 text-gray-500' />
+            <span className='font-medium'>视频源管理</span>
+          </button>
           {/* 设置按钮 */}
           <button
             onClick={handleSettings}

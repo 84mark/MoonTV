@@ -69,6 +69,16 @@ const withPWA = require('next-pwa')({
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  runtimeCaching: [
+    {
+      // Source edits must affect the next request, even on a slow connection.
+      urlPattern: ({ url }) =>
+        /^\/api\/(?:search(?:\/|$)|detail$|sources(?:\/|$))/.test(url.pathname),
+      handler: 'NetworkOnly',
+      method: 'GET',
+    },
+    ...require('next-pwa/cache'),
+  ],
 });
 
 module.exports = withPWA(nextConfig);

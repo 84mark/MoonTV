@@ -1,4 +1,5 @@
 import { API_CONFIG, ApiSite, getConfig } from '@/lib/config';
+import { fetchSourceUrl, sourceApiUrl } from '@/lib/source-network';
 import { SearchResult } from '@/lib/types';
 import { cleanHtmlTags } from '@/lib/utils';
 
@@ -17,19 +18,19 @@ interface ApiSearchItem {
 
 export async function searchFromApi(
   apiSite: ApiSite,
-  query: string
+  query: string,
+  maxSearchPages?: number
 ): Promise<SearchResult[]> {
   try {
     const apiBaseUrl = apiSite.api;
-    const apiUrl =
-      apiBaseUrl + API_CONFIG.search.path + encodeURIComponent(query);
+    const apiUrl = sourceApiUrl(apiBaseUrl, { ac: 'videolist', wd: query });
     const apiName = apiSite.name;
 
     // 添加超时处理
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const response = await fetch(apiUrl, {
+    const response = await fetchSourceUrl(apiUrl, {
       headers: API_CONFIG.search.headers,
       signal: controller.signal,
     });
@@ -55,7 +56,7 @@ export async function searchFromApi(
 
       // 使用正则表达式从 vod_play_url 提取 m3u8 链接
       if (item.vod_play_url) {
-        const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
+        const m3u8Regex = /\$(https?:\/\/[^"'\s#]+?\.m3u8(?:\?[^"'\s#]*)?)/g;
         // 先用 $$$ 分割
         const vod_play_url_array = item.vod_play_url.split('$$$');
         // 对每个分片做匹配，取匹配到最多的作为结果
@@ -90,8 +91,7 @@ export async function searchFromApi(
       };
     });
 
-    const config = await getConfig();
-    const MAX_SEARCH_PAGES: number = config.SiteConfig.SearchDownstreamMaxPage;
+    const MAX_SEARCH_PAGES = maxSearchPages ?? (await getConfig()).SiteConfig.SearchDownstreamMaxPage;
 
     // 获取总页数
     const pageCount = data.pagecount || 1;
@@ -103,11 +103,7 @@ export async function searchFromApi(
       const additionalPagePromises = [];
 
       for (let page = 2; page <= pagesToFetch + 1; page++) {
-        const pageUrl =
-          apiBaseUrl +
-          API_CONFIG.search.pagePath
-            .replace('{query}', encodeURIComponent(query))
-            .replace('{page}', page.toString());
+        const pageUrl = sourceApiUrl(apiBaseUrl, { ac: 'videolist', wd: query, pg: page.toString() });
 
         const pagePromise = (async () => {
           try {
@@ -117,7 +113,7 @@ export async function searchFromApi(
               8000
             );
 
-            const pageResponse = await fetch(pageUrl, {
+            const pageResponse = await fetchSourceUrl(pageUrl, {
               headers: API_CONFIG.search.headers,
               signal: pageController.signal,
             });
@@ -136,7 +132,7 @@ export async function searchFromApi(
 
               // 使用正则表达式从 vod_play_url 提取 m3u8 链接
               if (item.vod_play_url) {
-                const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
+                const m3u8Regex = /\$(https?:\/\/[^"'\s#]+?\.m3u8(?:\?[^"'\s#]*)?)/g;
                 episodes = item.vod_play_url.match(m3u8Regex) || [];
               }
 
@@ -198,12 +194,12 @@ export async function getDetailFromApi(
     return handleSpecialSourceDetail(id, apiSite);
   }
 
-  const detailUrl = `${apiSite.api}${API_CONFIG.detail.path}${id}`;
+  const detailUrl = sourceApiUrl(apiSite.api, { ac: 'videolist', ids: id });
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  const response = await fetch(detailUrl, {
+  const response = await fetchSourceUrl(detailUrl, {
     headers: API_CONFIG.detail.headers,
     signal: controller.signal,
   });
@@ -278,7 +274,7 @@ async function handleSpecialSourceDetail(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  const response = await fetch(detailUrl, {
+  const response = await fetchSourceUrl(detailUrl, {
     headers: API_CONFIG.detail.headers,
     signal: controller.signal,
   });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getAvailableApiSites, getCacheTime } from '@/lib/config';
+import { getAvailableApiSites, getCacheTime, sourceCacheHeaders } from '@/lib/config';
 
 export const runtime = 'edge';
 
@@ -11,11 +11,7 @@ export async function GET() {
     const cacheTime = await getCacheTime();
 
     return NextResponse.json(apiSites, {
-      headers: {
-        'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-        'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-        'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-      },
+      headers: sourceCacheHeaders(cacheTime),
     });
   } catch (error) {
     return NextResponse.json({ error: '获取资源失败' }, { status: 500 });

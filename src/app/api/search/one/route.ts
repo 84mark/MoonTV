@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getCacheTime, getConfig } from '@/lib/config';
+import { getCacheTime, getConfig, sourceCacheHeaders } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { yellowWords } from '@/lib/yellow';
 
@@ -17,11 +17,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { result: null, error: '缺少必要参数: q 或 resourceId' },
       {
-        headers: {
-          'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-          'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-        },
+        headers: sourceCacheHeaders(cacheTime),
       }
     );
   }
@@ -42,7 +38,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const results = await searchFromApi(targetSite, query);
+    const results = await searchFromApi(targetSite, query, config.SiteConfig.SearchDownstreamMaxPage);
     let result = results.filter((r) => r.title === query);
     if (!config.SiteConfig.DisableYellowFilter) {
       result = result.filter((result) => {
@@ -64,11 +60,7 @@ export async function GET(request: Request) {
       return NextResponse.json(
         { results: result },
         {
-          headers: {
-            'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-            'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-            'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          },
+          headers: sourceCacheHeaders(cacheTime),
         }
       );
     }

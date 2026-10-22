@@ -10,7 +10,8 @@ import React, {
 } from 'react';
 
 import { SearchResult } from '@/lib/types';
-import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
+import { getVideoResolutionFromM3u8 } from '@/lib/utils';
+import type { VideoProbeResult } from '@/lib/video-probe';
 
 // 定义视频信息类型
 interface VideoInfo {
@@ -18,6 +19,25 @@ interface VideoInfo {
   loadSpeed: string;
   pingTime: number;
   hasError?: boolean; // 添加错误状态标识
+  status?: VideoProbeResult['status'];
+  latencyKind?: VideoProbeResult['latencyKind'];
+  message?: string;
+}
+
+function mergeVideoInfo(current: VideoInfo | undefined, incoming: VideoInfo): VideoInfo {
+  const live = incoming.message === '当前播放器已确认可播放'
+    ? incoming : current?.message === '当前播放器已确认可播放' ? current : null;
+  if (!live || !current) return incoming;
+  const timing = incoming.pingTime > 0 ? incoming : current;
+  return {
+    ...incoming,
+    quality: live.quality !== '未知' ? live.quality : incoming.quality,
+    status: 'playable',
+    message: live.message,
+    loadSpeed: !['未知', '未测得'].includes(incoming.loadSpeed) ? incoming.loadSpeed : current.loadSpeed,
+    pingTime: timing.pingTime,
+    latencyKind: timing.latencyKind,
+  };
 }
 
 interface EpisodeSelectorProps {
@@ -105,11 +125,11 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   }, [currentPage, descending, pageCount]);
 
   // 获取视频信息的函数 - 移除 attemptedSources 依赖避免不必要的重新创建
-  const getVideoInfo = useCallback(async (source: SearchResult) => {
+  const getVideoInfo = useCallback(async (source: SearchResult, force = false) => {
     const sourceKey = `${source.source}-${source.id}`;
 
     // 使用 ref 获取最新的状态，避免闭包问题
-    if (attemptedSourcesRef.current.has(sourceKey)) {
+    if (!force && attemptedSourcesRef.current.has(sourceKey)) {
       return;
     }
 
@@ -117,23 +137,27 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     if (!source.episodes || source.episodes.length === 0) {
       return;
     }
-    const episodeUrl =
-      source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
+    const episodeUrl = source.episodes[0];
 
     // 标记为已尝试
     setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+    attemptedSourcesRef.current.add(sourceKey);
 
     try {
-      const info = await getVideoResolutionFromM3u8(episodeUrl);
-      setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
+      const info = await getVideoResolutionFromM3u8(episodeUrl, { force });
+      setVideoInfoMap((prev) => {
+        const current = prev.get(sourceKey);
+        return new Map(prev).set(sourceKey, mergeVideoInfo(current, info));
+      });
     } catch (error) {
       // 失败时保存错误状态
       setVideoInfoMap((prev) =>
         new Map(prev).set(sourceKey, {
-          quality: '错误',
-          loadSpeed: '未知',
+          quality: '未知',
+          loadSpeed: '未测得',
           pingTime: 0,
-          hasError: true,
+          status: 'unknown',
+          message: '预检未完成，可直接尝试播放',
         })
       );
     }
@@ -146,7 +170,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       setVideoInfoMap((prev) => {
         const newMap = new Map(prev);
         precomputedVideoInfo.forEach((value, key) => {
-          newMap.set(key, value);
+          newMap.set(key, mergeVideoInfo(newMap.get(key), value));
         });
         return newMap;
       });
@@ -154,7 +178,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       setAttemptedSources((prev) => {
         const newSet = new Set(prev);
         precomputedVideoInfo.forEach((info, key) => {
-          if (!info.hasError) {
+          if (!info.hasError && (info.pingTime > 0 || !['未知', '未测得'].includes(info.loadSpeed))) {
             newSet.add(key);
           }
         });
@@ -163,7 +187,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
       // 同步更新 ref，确保 getVideoInfo 能立即看到更新
       precomputedVideoInfo.forEach((info, key) => {
-        if (!info.hasError) {
+        if (!info.hasError && (info.pingTime > 0 || !['未知', '未测得'].includes(info.loadSpeed))) {
           attemptedSourcesRef.current.add(key);
         }
       });
@@ -203,11 +227,11 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
       if (pendingSources.length === 0) return;
 
-      const batchSize = Math.ceil(pendingSources.length / 2);
+      const batchSize = 3;
 
       for (let start = 0; start < pendingSources.length; start += batchSize) {
         const batch = pendingSources.slice(start, start + batchSize);
-        await Promise.all(batch.map(getVideoInfo));
+        await Promise.all(batch.map(source => getVideoInfo(source)));
       }
     };
 
@@ -422,6 +446,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       {/* 换源 Tab 内容 */}
       {activeTab === 'sources' && (
         <div className='flex flex-col h-full mt-4'>
+          <div className='mb-3 flex items-center justify-between gap-2 text-xs text-gray-500'>
+            <span>首集采样；未测得速度不代表不可播放</span>
+            <button className='shrink-0 text-green-600' onClick={() => { void Promise.all(availableSources.map(source => getVideoInfo(source, true))); }}>重新检测</button>
+          </div>
           {sourceSearchLoading && (
             <div className='flex items-center justify-center py-8'>
               <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-green-500'></div>
@@ -459,7 +487,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
             !sourceSearchError &&
             availableSources.length > 0 && (
               <div className='flex-1 overflow-y-auto space-y-2 pb-20'>
-                {availableSources
+                {[...availableSources]
                   .sort((a, b) => {
                     const aIsCurrent =
                       a.source?.toString() === currentSource?.toString() &&
@@ -471,134 +499,32 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                     if (!aIsCurrent && bIsCurrent) return 1;
                     return 0;
                   })
-                  .map((source, index) => {
-                    const isCurrentSource =
-                      source.source?.toString() === currentSource?.toString() &&
-                      source.id?.toString() === currentId?.toString();
+                  .map((source) => {
+                    const sourceKey = `${source.source}-${source.id}`;
+                    const info = videoInfoMap.get(sourceKey);
+                    const isCurrentSource = source.source?.toString() === currentSource?.toString() && source.id?.toString() === currentId?.toString();
+                    const status = info?.status === 'playable' ? '播放已确认' : info?.status === 'reachable' ? '接口可达' : info ? '预检未确认' : optimizationEnabled ? '检测中…' : '未检测';
                     return (
-                      <div
-                        key={`${source.source}-${source.id}`}
-                        onClick={() =>
-                          !isCurrentSource && handleSourceClick(source)
-                        }
-                        className={`flex items-start gap-3 px-2 py-3 rounded-lg transition-all select-none duration-200 relative
-                      ${
-                        isCurrentSource
-                          ? 'bg-green-500/10 dark:bg-green-500/20 border-green-500/30 border'
-                          : 'hover:bg-gray-200/50 dark:hover:bg-white/10 hover:scale-[1.02] cursor-pointer'
-                      }`.trim()}
+                      <button
+                        type='button'
+                        key={sourceKey}
+                        aria-pressed={isCurrentSource}
+                        aria-label={`${isCurrentSource ? '当前源' : '切换到'} ${source.source_name}`}
+                        title={info?.message || '点击切换播放源'}
+                        onClick={() => !isCurrentSource && handleSourceClick(source)}
+                        className={`grid w-full grid-cols-2 items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-left transition-colors ${isCurrentSource ? 'border-green-500 bg-green-500/10 dark:bg-green-500/20' : 'border-gray-200 hover:border-green-500/60 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-white/5'}`}
                       >
-                        {/* 封面 */}
-                        <div className='flex-shrink-0 w-12 h-20 bg-gray-300 dark:bg-gray-600 rounded overflow-hidden'>
-                          {source.episodes && source.episodes.length > 0 && (
-                            <img
-                              src={processImageUrl(source.poster)}
-                              alt={source.title}
-                              className='w-full h-full object-cover'
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                              }}
-                            />
-                          )}
-                        </div>
-
-                        {/* 信息区域 */}
-                        <div className='flex-1 min-w-0 flex flex-col justify-between h-20'>
-                          {/* 标题和分辨率 - 顶部 */}
-                          <div className='flex items-start justify-between gap-3 h-6'>
-                            <div className='flex-1 min-w-0 relative group/title'>
-                              <h3 className='font-medium text-base truncate text-gray-900 dark:text-gray-100 leading-none'>
-                                {source.title}
-                              </h3>
-                              {/* 标题级别的 tooltip - 第一个元素不显示 */}
-                              {index !== 0 && (
-                                <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-md shadow-lg opacity-0 invisible group-hover/title:opacity-100 group-hover/title:visible transition-all duration-200 ease-out delay-100 whitespace-nowrap z-[500] pointer-events-none'>
-                                  {source.title}
-                                  <div className='absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800'></div>
-                                </div>
-                              )}
-                            </div>
-                            {(() => {
-                              const sourceKey = `${source.source}-${source.id}`;
-                              const videoInfo = videoInfoMap.get(sourceKey);
-
-                              if (videoInfo && videoInfo.quality !== '未知') {
-                                if (videoInfo.hasError) {
-                                  return (
-                                    <div className='bg-gray-500/10 dark:bg-gray-400/20 text-red-600 dark:text-red-400 px-1.5 py-0 rounded text-xs flex-shrink-0 min-w-[50px] text-center'>
-                                      检测失败
-                                    </div>
-                                  );
-                                } else {
-                                  // 根据分辨率设置不同颜色：2K、4K为紫色，1080p、720p为绿色，其他为黄色
-                                  const isUltraHigh = ['4K', '2K'].includes(
-                                    videoInfo.quality
-                                  );
-                                  const isHigh = ['1080p', '720p'].includes(
-                                    videoInfo.quality
-                                  );
-                                  const textColorClasses = isUltraHigh
-                                    ? 'text-purple-600 dark:text-purple-400'
-                                    : isHigh
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : 'text-yellow-600 dark:text-yellow-400';
-
-                                  return (
-                                    <div
-                                      className={`bg-gray-500/10 dark:bg-gray-400/20 ${textColorClasses} px-1.5 py-0 rounded text-xs flex-shrink-0 min-w-[50px] text-center`}
-                                    >
-                                      {videoInfo.quality}
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              return null;
-                            })()}
-                          </div>
-
-                          {/* 源名称和集数信息 - 垂直居中 */}
-                          <div className='flex items-center justify-between'>
-                            <span className='text-xs px-2 py-1 border border-gray-500/60 rounded text-gray-700 dark:text-gray-300'>
-                              {source.source_name}
-                            </span>
-                            {source.episodes.length > 1 && (
-                              <span className='text-xs text-gray-500 dark:text-gray-400 font-medium'>
-                                {source.episodes.length} 集
-                              </span>
-                            )}
-                          </div>
-
-                          {/* 网络信息 - 底部 */}
-                          <div className='flex items-end h-6'>
-                            {(() => {
-                              const sourceKey = `${source.source}-${source.id}`;
-                              const videoInfo = videoInfoMap.get(sourceKey);
-                              if (videoInfo) {
-                                if (!videoInfo.hasError) {
-                                  return (
-                                    <div className='flex items-end gap-3 text-xs'>
-                                      <div className='text-green-600 dark:text-green-400 font-medium text-xs'>
-                                        {videoInfo.loadSpeed}
-                                      </div>
-                                      <div className='text-orange-600 dark:text-orange-400 font-medium text-xs'>
-                                        {videoInfo.pingTime}ms
-                                      </div>
-                                    </div>
-                                  );
-                                } else {
-                                  return (
-                                    <div className='text-red-500/90 dark:text-red-400 font-medium text-xs'>
-                                      无测速数据
-                                    </div>
-                                  ); // 占位div
-                                }
-                              }
-                            })()}
-                          </div>
-                        </div>
-                      </div>
+                        <span className='col-span-2 min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100'>
+                          {source.source_name}{isCurrentSource && <span className='ml-2 text-xs text-green-600 dark:text-green-400'>当前</span>}
+                        </span>
+                        <span className={`col-span-2 text-xs ${info?.status === 'playable' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                          {info?.quality && info.quality !== '未知' ? `${info.quality} · ` : ''}{status}
+                        </span>
+                        <span className='whitespace-nowrap text-[11px] text-gray-500'>速度 {info?.loadSpeed || '未测得'}</span>
+                        <span className='whitespace-nowrap text-right text-[11px] text-gray-500'>
+                          {info && info.pingTime > 0 ? `${info.latencyKind === 'metadata' ? '准备' : '响应'} ${info.pingTime} ms` : '响应未测得'}
+                        </span>
+                      </button>
                     );
                   })}
                 <div className='flex-shrink-0 mt-auto pt-2 border-t border-gray-400 dark:border-gray-700'>
