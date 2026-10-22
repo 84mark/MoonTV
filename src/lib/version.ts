@@ -11,11 +11,9 @@ export enum UpdateStatus {
   FETCH_FAILED = 'fetch_failed', // 获取失败
 }
 
-// 远程版本检查URL配置
-const VERSION_CHECK_URLS = [
-  'https://ghfast.top/raw.githubusercontent.com/senshinya/MoonTV/main/VERSION.txt',
-  'https://raw.githubusercontent.com/senshinya/MoonTV/main/VERSION.txt',
-];
+// 本仓库的版本，不再请求已停止维护的原作者仓库或第三方加速站。
+const VERSION_CHECK_URL =
+  'https://raw.githubusercontent.com/84mark/MoonTV/main/VERSION.txt';
 
 /**
  * 检查是否有新版本可用
@@ -23,20 +21,8 @@ const VERSION_CHECK_URLS = [
  */
 export async function checkForUpdates(): Promise<UpdateStatus> {
   try {
-    // 尝试从主要URL获取版本信息
-    const primaryVersion = await fetchVersionFromUrl(VERSION_CHECK_URLS[0]);
-    if (primaryVersion) {
-      return compareVersions(primaryVersion);
-    }
-
-    // 如果主要URL失败，尝试备用URL
-    const backupVersion = await fetchVersionFromUrl(VERSION_CHECK_URLS[1]);
-    if (backupVersion) {
-      return compareVersions(backupVersion);
-    }
-
-    // 如果两个URL都失败，返回获取失败状态
-    return UpdateStatus.FETCH_FAILED;
+    const version = await fetchVersionFromUrl(VERSION_CHECK_URL);
+    return version ? compareVersions(version) : UpdateStatus.FETCH_FAILED;
   } catch (error) {
     console.error('版本检查失败:', error);
     return UpdateStatus.FETCH_FAILED;
@@ -49,29 +35,27 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
  * @returns Promise<string | null> - 版本字符串或null
  */
 async function fetchVersionFromUrl(url: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
-
     const response = await fetch(url, {
       method: 'GET',
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'text/plain',
-      },
+      cache: 'no-store',
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const version = await response.text();
-    return version.trim();
+    const normalized = version.trim();
+    return /^\d{14}$/.test(normalized) ? normalized : null;
   } catch (error) {
     console.warn(`从 ${url} 获取版本信息失败:`, error);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
