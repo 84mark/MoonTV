@@ -129,3 +129,25 @@ it('keeps fallback Douban posters on the built-in image proxy when metadata fail
   await screen.findByText(/豆瓣资料暂时无法获取/);
   localStorage.clear();
 });
+
+it('puts playable episode links beside the poster and retains the original category return target', async () => {
+  query = 'title=剧集&source=fixture&id=101&returnTo=%2Fdouban%3Ftype%3Dtv';
+  (fetch as jest.Mock)
+    .mockResolvedValueOnce(
+      response({ title: '剧集', episodes: ['one', 'two', 'three'] })
+    )
+    .mockResolvedValueOnce(response({ subject: null, candidates: [] }));
+  render(<DetailPage />);
+  const episode = await screen.findByRole('link', { name: '播放第 3 集' });
+  const url = new URL(
+    episode.getAttribute('href') || '',
+    'https://example.test'
+  );
+  expect(url.searchParams.get('episode')).toBe('3');
+  expect(url.searchParams.get('prefer')).toBe('true');
+  expect(url.searchParams.has('preload')).toBe(false);
+  expect(screen.getByRole('link', { name: /返回浏览/ })).toHaveAttribute(
+    'href',
+    '/douban?type=tv'
+  );
+});

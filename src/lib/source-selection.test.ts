@@ -1,4 +1,8 @@
-import { firstMeasuredSource, speedKBps } from './source-selection';
+import {
+  firstMeasuredSource,
+  measureSourceEpisodes,
+  speedKBps,
+} from './source-selection';
 import type { SearchResult } from './types';
 import type { VideoProbeResult } from './video-probe';
 const source = (id: string): SearchResult => ({
@@ -57,7 +61,7 @@ it('starts every source and selects the first measured completion instead of wai
   await expect(chosen).resolves.toMatchObject({ id: '3' });
   b.resolve(result('5 MB/s'));
   c.resolve(result('1 MB/s'));
-  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   expect(updates).toHaveBeenCalledTimes(4);
   await expect(chosen).resolves.toMatchObject({ id: '3' });
 });
@@ -90,4 +94,37 @@ it('handles rejected probes and an empty source list', async () => {
   await expect(
     firstMeasuredSource([], jest.fn(), jest.fn())
   ).resolves.toBeNull();
+});
+
+it('samples the requested and following episode and ranks by the slower speed', async () => {
+  const series = {
+    ...source('show'),
+    episodes: ['one', 'two', 'three', 'four'],
+  };
+  const probe = jest.fn(async (url: string) =>
+    result(url === 'three' ? '2 MB/s' : '400 KB/s')
+  );
+  const measured = await measureSourceEpisodes(series, probe, 2);
+  expect(probe.mock.calls.map((call) => call[0])).toEqual(['three', 'four']);
+  expect(measured.loadSpeed).toBe('400 KB/s');
+  probe.mockClear();
+  await measureSourceEpisodes(series, probe, 3);
+  expect(probe.mock.calls.map((call) => call[0])).toEqual(['four']);
+  probe.mockClear();
+  expect((await measureSourceEpisodes(series, probe, 4)).loadSpeed).toBe(
+    '未测得'
+  );
+  expect(probe).not.toHaveBeenCalled();
+});
+
+it('does not reject a measured current episode solely because the successor probe is inconclusive', async () => {
+  const series = { ...source('show'), episodes: ['current', 'next'] };
+  const probe = async (url: string) =>
+    result(url === 'current' ? '1 MB/s' : '未测得');
+  expect((await measureSourceEpisodes(series, probe)).loadSpeed).toBe('1 MB/s');
+  const missingCurrent = async (url: string) =>
+    result(url === 'current' ? '未测得' : '1 MB/s');
+  expect((await measureSourceEpisodes(series, missingCurrent)).loadSpeed).toBe(
+    '未测得'
+  );
 });

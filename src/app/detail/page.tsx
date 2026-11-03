@@ -9,6 +9,7 @@ import type { DoubanSubject } from '@/lib/douban-comments';
 import { validDoubanId } from '@/lib/douban-comments';
 import type { DoubanSubjectDetail } from '@/lib/douban-subject';
 import { getBuiltinImageProxyUrl } from '@/lib/image-proxy';
+import { browseReturn } from '@/lib/navigation';
 import type {
   PlaybackPreparation,
   PlaybackPreparationState,
@@ -151,13 +152,17 @@ function DetailPageClient() {
   }
   const noPlayableSource =
     prepared?.status === 'complete' && !prepared.selected;
+  // Read cookies only in preparation's effect, keeping server/client initial markup equal.
+  const episodeIndex = prepared?.episodeIndex ?? 0;
+  playParams.set('episode', String(episodeIndex + 1));
+  const episodeSource = prepared?.selected || source || prepared?.sources[0];
   const playbackLink = `/play?${playParams}`;
 
   return (
     <PageLayout activePath='/'>
       <div className='mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-8 md:py-10'>
         <Link
-          href='/'
+          href={browseReturn(searchParams.get('returnTo'))}
           className='inline-flex text-sm text-gray-500 hover:text-blue-600'
         >
           ← 返回浏览
@@ -271,9 +276,43 @@ function DetailPageClient() {
                 </span>
               )}
             </div>
-            <p className='mt-3 text-xs text-gray-500'>
-              进入播放页后可选择剧集、切换片源。
-            </p>
+            {episodeSource && episodeSource.episodes?.length > 1 && (
+              <div className='mt-6' aria-label='剧集选集'>
+                <h2 className='mb-3 text-sm font-semibold'>
+                  选集 · 共 {episodeSource.episodes.length} 集
+                </h2>
+                {episodeIndex > 0 && (
+                  <p className='mb-3 text-xs text-gray-500'>
+                    上次观看至第 {episodeIndex + 1} 集
+                  </p>
+                )}
+                <div className='grid max-h-60 grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2 overflow-y-auto pr-1'>
+                  {episodeSource.episodes.map((_, index) => {
+                    const params = new URLSearchParams(playParams);
+                    params.set('episode', String(index + 1));
+                    // A different episode must not reuse measurements from the remembered one.
+                    if (index !== episodeIndex) {
+                      params.delete('preload');
+                      params.set('prefer', 'true');
+                    }
+                    return (
+                      <Link
+                        key={index}
+                        href={`/play?${params}`}
+                        aria-label={`播放第 ${index + 1} 集`}
+                        className={`rounded-lg border px-2 py-2 text-center text-sm ${
+                          index === episodeIndex
+                            ? 'border-green-500 bg-green-500/10 text-green-700 dark:text-green-400'
+                            : 'border-gray-200 hover:border-green-500 dark:border-gray-700'
+                        }`}
+                      >
+                        第 {index + 1} 集
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </section>
         <section className='glass-panel detail-section'>

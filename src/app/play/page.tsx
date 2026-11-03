@@ -21,8 +21,14 @@ import {
   saveSkipConfig,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import {
+  rememberEpisode,
+  requestedEpisode,
+  storedEpisode,
+} from '@/lib/episode-progress';
 import { getPreparedPlayback } from '@/lib/playback-preload';
-import { firstMeasuredSource } from '@/lib/source-selection';
+import { DownloadMeter } from '@/lib/playback-stats';
+import { measureSourceEpisodes, speedKBps } from '@/lib/source-selection';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 import { qualityForWidth, VideoProbeResult } from '@/lib/video-probe';
@@ -30,6 +36,7 @@ import { qualityForWidth, VideoProbeResult } from '@/lib/video-probe';
 import DoubanComments from '@/components/DoubanComments';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
+import PlaybackStats from '@/components/PlaybackStats';
 
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
 declare global {
@@ -115,7 +122,16 @@ function PlayPageClient() {
     needPreferRef.current = needPrefer;
   }, [needPrefer]);
   // 集数相关
-  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(() =>
+    requestedEpisode(new URLSearchParams(searchParams.toString()))
+  );
+  const [measuredEpisodeIndex, setMeasuredEpisodeIndex] =
+    useState(currentEpisodeIndex);
+  const downloadMeter = useRef(new DownloadMeter()).current;
+  const [statsTarget, setStatsTarget] = useState<{
+    container: HTMLElement;
+    video: HTMLVideoElement;
+  } | null>(null);
 
   const currentSourceRef = useRef(currentSource);
   const currentIdRef = useRef(currentId);
@@ -209,11 +225,33 @@ function PlayPageClient() {
   // -----------------------------------------------------------------------------
 
   // 播放源优选函数
-  const preferBestSource = (sources: SearchResult[]): Promise<SearchResult | null> =>
-    firstMeasuredSource(sources,
-      (url) => getVideoResolutionFromM3u8(url),
-      (source, result) => setPrecomputedVideoInfo((previous) =>
-        new Map(previous).set(`${source.source}-${source.id}`, result)));
+  const preferBestSource = async (
+    sources: SearchResult[]
+  ): Promise<SearchResult | null> => {
+    const index = currentEpisodeIndexRef.current;
+    const measured = await Promise.all(
+      sources.map(async (source) => {
+        const result = await measureSourceEpisodes(
+          source,
+          (url) => getVideoResolutionFromM3u8(url),
+          index
+        );
+        setMeasuredEpisodeIndex(index);
+        setPrecomputedVideoInfo((previous) =>
+          new Map(previous).set(`${source.source}-${source.id}`, result)
+        );
+        return { source, result };
+      })
+    );
+    return (
+      measured
+        .filter((item) => speedKBps(item.result.loadSpeed) > 0)
+        .sort(
+          (a, b) =>
+            speedKBps(b.result.loadSpeed) - speedKBps(a.result.loadSpeed)
+        )[0]?.source || null
+    );
+  };
 
   // 更新视频地址
   const updateVideoUrl = (
@@ -485,12 +523,34 @@ function PlayPageClient() {
           : '🔍 正在搜索播放源...'
       );
 
-      const prepared = getPreparedPlayback(searchParams.get('preload'));
+      // Resolve legacy source-specific records before probing or creating the player.
+      let records: Awaited<ReturnType<typeof getAllPlayRecords>> = {};
+      try {
+        records = await getAllPlayRecords();
+      } catch {
+        /* Cookie resume still works offline. */
+      }
+      if (
+        !searchParams.has('episode') &&
+        storedEpisode(videoTitle, videoYear) === undefined
+      ) {
+        const legacy = records[generateStorageKey(currentSource, currentId)];
+        if (legacy && Number.isSafeInteger(legacy.index) && legacy.index > 0) {
+          currentEpisodeIndexRef.current = legacy.index - 1;
+          setCurrentEpisodeIndex(legacy.index - 1);
+        }
+      }
+      const candidate = getPreparedPlayback(searchParams.get('preload'));
+      const prepared =
+        candidate?.snapshot.episodeIndex === currentEpisodeIndexRef.current
+          ? candidate
+          : null;
       let sourcesInfo: SearchResult[];
       if (prepared && prepared.snapshot.sources.length > 0) {
         sourcesInfo = prepared.snapshot.sources;
         setAvailableSources(sourcesInfo);
         setPrecomputedVideoInfo(new Map(prepared.snapshot.results));
+        setMeasuredEpisodeIndex(currentEpisodeIndexRef.current);
         setSourceSearchLoading(false);
       } else {
         sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
@@ -531,7 +591,11 @@ function PlayPageClient() {
         optimizationEnabled
       ) {
         setLoadingStage('preferring');
-        setLoadingMessage('⚡ 正在检测片源，测得速度后立即播放...');
+        setLoadingMessage(
+          `⚡ 正在检测第 ${
+            currentEpisodeIndexRef.current + 1
+          } 集及下一集，优选播放源...`
+        );
 
         const preferred = await preferBestSource(sourcesInfo);
         if (!preferred) {
@@ -542,6 +606,10 @@ function PlayPageClient() {
         detailData = preferred;
       }
 
+      const history =
+        records[generateStorageKey(detailData.source, detailData.id)];
+      if (history?.index === currentEpisodeIndexRef.current + 1)
+        resumeTimeRef.current = history.play_time;
       console.log(detailData.source, detailData.id);
 
       setNeedPrefer(false);
@@ -551,7 +619,9 @@ function PlayPageClient() {
       setVideoTitle(detailData.title || videoTitleRef.current);
       setVideoCover(detailData.poster);
       setDetail(detailData);
-      if (currentEpisodeIndex >= detailData.episodes.length) {
+      if (currentEpisodeIndexRef.current >= detailData.episodes.length) {
+        currentEpisodeIndexRef.current = 0;
+        resumeTimeRef.current = null;
         setCurrentEpisodeIndex(0);
       }
 
@@ -562,7 +632,7 @@ function PlayPageClient() {
       newUrl.searchParams.set('year', detailData.year);
       newUrl.searchParams.set('title', detailData.title);
       newUrl.searchParams.delete('prefer');
-      window.history.replaceState({}, '', newUrl.toString());
+      window.history.replaceState(window.history.state, '', newUrl.toString());
 
       setLoadingStage('ready');
       setLoadingMessage('✨ 准备就绪，即将开始播放...');
@@ -571,37 +641,6 @@ function PlayPageClient() {
     };
 
     initAll();
-  }, []);
-
-  // 播放记录处理
-  useEffect(() => {
-    // 仅在初次挂载时检查播放记录
-    const initFromHistory = async () => {
-      if (!currentSource || !currentId) return;
-
-      try {
-        const allRecords = await getAllPlayRecords();
-        const key = generateStorageKey(currentSource, currentId);
-        const record = allRecords[key];
-
-        if (record) {
-          const targetIndex = record.index - 1;
-          const targetTime = record.play_time;
-
-          // 更新当前选集索引
-          if (targetIndex !== currentEpisodeIndex) {
-            setCurrentEpisodeIndex(targetIndex);
-          }
-
-          // 保存待恢复的播放进度，待播放器就绪后跳转
-          resumeTimeRef.current = targetTime;
-        }
-      } catch (err) {
-        console.error('读取播放记录失败:', err);
-      }
-    };
-
-    initFromHistory();
   }, []);
 
   // 跳过片头片尾配置处理
@@ -695,7 +734,7 @@ function PlayPageClient() {
       newUrl.searchParams.set('source', newSource);
       newUrl.searchParams.set('id', newId);
       newUrl.searchParams.set('year', newDetail.year);
-      window.history.replaceState({}, '', newUrl.toString());
+      window.history.replaceState(window.history.state, '', newUrl.toString());
 
       setVideoTitle(newDetail.title || newTitle);
       setVideoYear(newDetail.year);
@@ -725,7 +764,7 @@ function PlayPageClient() {
   const handleEpisodeChange = (episodeNumber: number) => {
     if (episodeNumber >= 0 && episodeNumber < totalEpisodes) {
       // 在更换集数前保存当前播放进度
-      if (artPlayerRef.current && artPlayerRef.current.paused) {
+      if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
       setCurrentEpisodeIndex(episodeNumber);
@@ -868,6 +907,11 @@ function PlayPageClient() {
       return;
     }
 
+    rememberEpisode(
+      videoTitleRef.current,
+      videoYearRef.current,
+      currentEpisodeIndexRef.current
+    );
     try {
       await savePlayRecord(currentSourceRef.current, currentIdRef.current, {
         title: videoTitleRef.current,
@@ -924,6 +968,11 @@ function PlayPageClient() {
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
       }
+      void saveCurrentPlayProgress();
+      artPlayerRef.current?.video?.hls?.destroy();
+      artPlayerRef.current?.destroy();
+      artPlayerRef.current = null;
+      downloadMeter.reset();
     };
   }, []);
 
@@ -1026,6 +1075,7 @@ function PlayPageClient() {
       typeof window !== 'undefined' &&
       typeof (window as any).webkitConvertPointFromNodeToPage === 'function';
 
+    downloadMeter.reset();
     // 非WebKit浏览器且播放器已存在，使用switch方法切换
     if (!isWebkit && artPlayerRef.current) {
       artPlayerRef.current.switch = videoUrl;
@@ -1102,7 +1152,10 @@ function PlayPageClient() {
             if (video.hls) {
               video.hls.destroy();
             }
-            if (!Hls.isSupported() && video.canPlayType('application/vnd.apple.mpegurl')) {
+            if (
+              !Hls.isSupported() &&
+              video.canPlayType('application/vnd.apple.mpegurl')
+            ) {
               video.src = url;
               return;
             }
@@ -1122,6 +1175,13 @@ function PlayPageClient() {
                 : Hls.DefaultConfig.loader,
             });
 
+            downloadMeter.available = true;
+            hls.on(Hls.Events.FRAG_LOADING, (_, data) =>
+              downloadMeter.track(data.frag.stats)
+            );
+            hls.on(Hls.Events.FRAG_LOADED, (_, data) =>
+              downloadMeter.track(data.frag.stats)
+            );
             hls.loadSource(url);
             hls.attachMedia(video);
             video.hls = hls;
@@ -1263,6 +1323,24 @@ function PlayPageClient() {
         ],
       });
 
+      setStatsTarget({
+        container: artPlayerRef.current.template.$player,
+        video: artPlayerRef.current.video,
+      });
+      artPlayerRef.current.on('video:playing', () => {
+        rememberEpisode(
+          videoTitleRef.current,
+          videoYearRef.current,
+          currentEpisodeIndexRef.current
+        );
+        const url = new URL(window.location.href);
+        url.searchParams.set(
+          'episode',
+          String(currentEpisodeIndexRef.current + 1)
+        );
+        window.history.replaceState(window.history.state, '', url.toString());
+      });
+
       // 监听播放器事件
       artPlayerRef.current.on('ready', () => {
         setError(null);
@@ -1279,10 +1357,12 @@ function PlayPageClient() {
       artPlayerRef.current.on('video:canplay', () => {
         const sourceKey = `${currentSourceRef.current}-${currentIdRef.current}`;
         const width = artPlayerRef.current.video.videoWidth;
-        setPrecomputedVideoInfo(previous => {
+        setPrecomputedVideoInfo((previous) => {
           const measured = previous.get(sourceKey);
           return new Map(previous).set(sourceKey, {
-            quality: width ? qualityForWidth(width) : measured?.quality || '未知',
+            quality: width
+              ? qualityForWidth(width)
+              : measured?.quality || '未知',
             loadSpeed: measured?.loadSpeed || '未测得',
             pingTime: measured?.pingTime || 0,
             latencyKind: measured?.latencyKind || null,
@@ -1420,50 +1500,74 @@ function PlayPageClient() {
     }
   }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
 
-  // 当组件卸载时清理定时器
-  useEffect(() => {
-    return () => {
-      if (saveIntervalRef.current) {
-        clearInterval(saveIntervalRef.current);
-      }
-    };
-  }, []);
-
   if (loading) {
-    return <PageLayout activePath='/play'>
-      <div className='flex min-h-[75vh] items-center justify-center px-5'>
-        <div className='glass-panel w-full max-w-sm px-8 py-10 text-center'>
-          <div className='mx-auto mb-6 h-9 w-9 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-blue-900 dark:border-t-blue-400' />
-          <p role='status' className='text-base font-medium'>{loadingMessage.replace(/🎬|🔍|⚡|✨/g, '').trim()}</p>
-          <p className='mt-3 text-sm text-gray-500'>正在准备播放</p>
+    return (
+      <PageLayout activePath='/play'>
+        <div className='flex min-h-[75vh] items-center justify-center px-5'>
+          <div className='glass-panel w-full max-w-sm px-8 py-10 text-center'>
+            <div className='mx-auto mb-6 h-9 w-9 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-blue-900 dark:border-t-blue-400' />
+            <p role='status' className='text-base font-medium'>
+              {loadingMessage.replace(/🎬|🔍|⚡|✨/g, '').trim()}
+            </p>
+            <p className='mt-3 text-sm text-gray-500'>正在准备播放</p>
+          </div>
         </div>
-      </div>
-    </PageLayout>;
+      </PageLayout>
+    );
   }
 
   if (error === '当前所有源均不可用') {
-    return <PageLayout activePath='/play'>
-      <div className='flex min-h-[70vh] flex-col items-center justify-center gap-4 px-6 text-center'>
-        <p role='status' className='text-xl font-medium'>当前所有源均不可用</p>
-        <p className='text-sm text-gray-500'>所有片源均未测得播放速度，请稍后重新检测。</p>
-        <button onClick={() => window.location.reload()} className='rounded-lg bg-blue-600 px-5 py-2 text-white'>重新检测</button>
-      </div>
-    </PageLayout>;
+    return (
+      <PageLayout activePath='/play'>
+        <div className='flex min-h-[70vh] flex-col items-center justify-center gap-4 px-6 text-center'>
+          <p role='status' className='text-xl font-medium'>
+            当前所有源均不可用
+          </p>
+          <p className='text-sm text-gray-500'>
+            所有片源均未测得播放速度，请稍后重新检测。
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className='rounded-lg bg-blue-600 px-5 py-2 text-white'
+          >
+            重新检测
+          </button>
+        </div>
+      </PageLayout>
+    );
   }
 
   if (error) {
-    return <PageLayout activePath='/play'>
-      <div className='flex min-h-[75vh] items-center justify-center px-5'>
-        <div className='glass-panel w-full max-w-md p-8 text-center'>
-          <h2 className='text-xl font-semibold'>暂时无法播放</h2>
-          <p role='status' className='mt-4 text-sm leading-7 text-gray-500'>{error}</p>
-          <div className='mt-7 flex justify-center gap-3'>
-            <button onClick={() => videoTitle ? router.push(`/search?q=${encodeURIComponent(videoTitle)}`) : router.back()} className='rounded-xl border border-blue-200 px-5 py-2.5 text-sm text-blue-600 dark:border-blue-900 dark:text-blue-400'>返回搜索</button>
-            <button onClick={() => window.location.reload()} className='rounded-xl bg-blue-600 px-5 py-2.5 text-sm text-white'>重新尝试</button>
+    return (
+      <PageLayout activePath='/play'>
+        <div className='flex min-h-[75vh] items-center justify-center px-5'>
+          <div className='glass-panel w-full max-w-md p-8 text-center'>
+            <h2 className='text-xl font-semibold'>暂时无法播放</h2>
+            <p role='status' className='mt-4 text-sm leading-7 text-gray-500'>
+              {error}
+            </p>
+            <div className='mt-7 flex justify-center gap-3'>
+              <button
+                onClick={() =>
+                  videoTitle
+                    ? router.push(`/search?q=${encodeURIComponent(videoTitle)}`)
+                    : router.back()
+                }
+                className='rounded-xl border border-blue-200 px-5 py-2.5 text-sm text-blue-600 dark:border-blue-900 dark:text-blue-400'
+              >
+                返回搜索
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className='rounded-xl bg-blue-600 px-5 py-2.5 text-sm text-white'
+              >
+                重新尝试
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </PageLayout>;
+      </PageLayout>
+    );
   }
 
   return (
@@ -1537,10 +1641,18 @@ function PlayPageClient() {
               }`}
             >
               <div className='relative w-full h-[300px] lg:h-full'>
-                <div
-                  ref={artRef}
-                  className='player-frame w-full h-full'
-                ></div>
+                <div ref={artRef} className='player-frame w-full h-full'></div>
+
+                {statsTarget && (
+                  <PlaybackStats
+                    container={statsTarget.container}
+                    video={statsTarget.video}
+                    meter={downloadMeter}
+                    episode={currentEpisodeIndex + 1}
+                    total={totalEpisodes}
+                    mediaKey={videoUrl}
+                  />
+                )}
 
                 {/* 换源加载蒙层 */}
                 {isVideoLoading && (
@@ -1591,6 +1703,8 @@ function PlayPageClient() {
               }`}
             >
               <EpisodeSelector
+                key={`${videoTitle}-${currentEpisodeIndex}`}
+                probeEpisodeIndex={currentEpisodeIndex}
                 totalEpisodes={totalEpisodes}
                 value={currentEpisodeIndex + 1}
                 onChange={handleEpisodeChange}
@@ -1601,8 +1715,15 @@ function PlayPageClient() {
                 availableSources={availableSources}
                 sourceSearchLoading={sourceSearchLoading}
                 sourceSearchError={sourceSearchError}
-                precomputedVideoInfo={precomputedVideoInfo}
-                onAllSourcesUnavailable={() => setError('当前所有源均不可用')}
+                precomputedVideoInfo={
+                  measuredEpisodeIndex === currentEpisodeIndex
+                    ? precomputedVideoInfo
+                    : undefined
+                }
+                onAllSourcesUnavailable={() => {
+                  if (!artPlayerRef.current?.playing)
+                    setSourceSearchError('预检未测得速度，可手动切换片源');
+                }}
               />
             </div>
           </div>
@@ -1611,7 +1732,9 @@ function PlayPageClient() {
         <DoubanComments
           title={videoTitle}
           year={videoYear || detail?.year || ''}
-          doubanId={searchParams.get('douban_id') || String(detail?.douban_id || '')}
+          doubanId={
+            searchParams.get('douban_id') || String(detail?.douban_id || '')
+          }
           kind={searchParams.get('douban_type') || searchType}
         />
 

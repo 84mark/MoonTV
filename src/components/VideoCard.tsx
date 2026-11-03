@@ -207,7 +207,12 @@ export default function VideoCard({
   );
 
   const handleClick = useCallback(() => {
-    const contentKind = doubanType || (actualSearchType === 'tv' || (actualEpisodes || 0) > 1 ? 'tv' : 'movie');
+    const contentKind =
+      doubanType ||
+      (actualSearchType === 'tv' || (actualEpisodes || 0) > 1 ? 'tv' : 'movie');
+    const returnQuery = `&returnTo=${encodeURIComponent(
+      window.location.pathname + window.location.search + window.location.hash
+    )}`;
     const doubanQuery = /^\d{5,12}$/.test(actualDoubanId)
       ? `&douban_id=${actualDoubanId}&douban_type=${contentKind}`
       : '';
@@ -215,7 +220,11 @@ export default function VideoCard({
       router.push(
         `/detail?title=${encodeURIComponent(actualTitle.trim())}${
           actualYear ? `&year=${actualYear}` : ''
-        }${actualSearchType ? `&stype=${actualSearchType}` : ''}${doubanQuery}&poster=${encodeURIComponent(actualPoster || '')}`
+        }${
+          actualSearchType ? `&stype=${actualSearchType}` : ''
+        }${doubanQuery}&poster=${encodeURIComponent(
+          actualPoster || ''
+        )}${returnQuery}`
       );
     } else if (actualSource && actualId) {
       router.push(
@@ -225,7 +234,11 @@ export default function VideoCard({
           isAggregate ? '&prefer=true' : ''
         }${
           actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''
-        }${actualSearchType ? `&stype=${actualSearchType}` : ''}${doubanQuery}&poster=${encodeURIComponent(actualPoster || '')}`
+        }${
+          actualSearchType ? `&stype=${actualSearchType}` : ''
+        }${doubanQuery}&poster=${encodeURIComponent(
+          actualPoster || ''
+        )}${returnQuery}`
       );
     }
   }, [
@@ -294,7 +307,8 @@ export default function VideoCard({
       tabIndex={0}
       aria-label={`查看 ${actualTitle} 的详情`}
       onKeyDown={(event) => {
-        if (event.target === event.currentTarget && event.key === 'Enter') handleClick();
+        if (event.target === event.currentTarget && event.key === 'Enter')
+          handleClick();
       }}
     >
       {/* 海报容器 */}

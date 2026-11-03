@@ -1,3 +1,4 @@
+import { requestedEpisode } from './episode-progress';
 import { firstMeasuredSource, speedKBps } from './source-selection';
 import type { SearchResult } from './types';
 import type { VideoProbeResult } from './video-probe';
@@ -10,6 +11,7 @@ export interface PlaybackPreparationState {
   firstSource: SearchResult | null;
   selected: SearchResult | null;
   completed: number;
+  episodeIndex?: number;
 }
 export interface PlaybackPreparation {
   id: string;
@@ -67,6 +69,8 @@ export function preparePlayback(
   };
   void (async () => {
     const params = new URLSearchParams(query);
+    const episodeIndex = requestedEpisode(params);
+    session.snapshot = { ...session.snapshot, episodeIndex };
     const title = params.get('title') || '';
     const search = params.get('stitle') || title;
     const year = params.get('year') || '';
@@ -149,6 +153,7 @@ export function preparePlayback(
               speedKBps(results.get(key(a))?.loadSpeed)
           );
         publish({
+          episodeIndex,
           status: complete ? 'complete' : 'testing',
           sources,
           results,
@@ -156,7 +161,8 @@ export function preparePlayback(
           selected: complete ? ranked[0] || null : firstSource,
           completed: results.size,
         });
-      }
+      },
+      episodeIndex
     );
   })().catch(() => publish({ ...session.snapshot, status: 'error' }));
   return session;

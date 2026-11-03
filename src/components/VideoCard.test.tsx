@@ -104,9 +104,37 @@ it('opens the details page with the existing Douban identity instead of autoplay
 });
 
 it('carries the Douban TV type separately without restricting variety-show playback to multiple episodes', () => {
-  render(<VideoCard from='douban' title='现在就出发 第四季' poster={poster} douban_id='37816990' doubanType='tv' />);
-  fireEvent.click(screen.getByRole('link', { name: /查看 现在就出发 第四季 的详情/ }));
-  const url = new URL(mockPush.mock.calls[mockPush.mock.calls.length - 1][0], 'https://example.test');
+  render(
+    <VideoCard
+      from='douban'
+      title='现在就出发 第四季'
+      poster={poster}
+      douban_id='37816990'
+      doubanType='tv'
+    />
+  );
+  fireEvent.click(
+    screen.getByRole('link', { name: /查看 现在就出发 第四季 的详情/ })
+  );
+  const url = new URL(
+    mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
+    'https://example.test'
+  );
   expect(url.searchParams.get('douban_type')).toBe('tv');
   expect(url.searchParams.get('stype')).toBeNull();
 });
+
+it.each(['movie', 'tv', 'show'])(
+  'carries the originating %s menu into detail navigation',
+  (type) => {
+    window.history.replaceState({}, '', `/douban?type=${type}`);
+    render(<VideoCard from='douban' title='剧集' poster={poster} />);
+    fireEvent.click(screen.getByRole('link', { name: /查看 剧集 的详情/ }));
+    const url = new URL(
+      mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
+      'https://example.test'
+    );
+    expect(url.searchParams.get('returnTo')).toBe(`/douban?type=${type}`);
+    window.history.replaceState({}, '', '/');
+  }
+);

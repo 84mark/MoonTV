@@ -105,3 +105,16 @@ it('filters wrong years/titles and preserves a specifically selected source with
     cache: 'no-store',
   });
 });
+
+it('prepares the explicitly selected episode and its successor, reusing neither the first episode nor stale selection', async () => {
+  const series = { ...a, episodes: ['first', 'second', 'third', 'fourth'] };
+  (fetch as jest.Mock).mockResolvedValueOnce(response([series]));
+  (getVideoResolutionFromM3u8 as jest.Mock).mockResolvedValue(result('1 MB/s'));
+  const session = preparePlayback(query + '&episode=3');
+  await flush();
+  expect(session.snapshot.episodeIndex).toBe(2);
+  expect(session.snapshot.selected).toEqual(series);
+  expect(
+    (getVideoResolutionFromM3u8 as jest.Mock).mock.calls.map((call) => call[0])
+  ).toEqual(['third', 'fourth']);
+});

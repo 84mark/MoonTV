@@ -7,6 +7,7 @@ import { Suspense } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getDoubanCategories, getDoubanList } from '@/lib/douban.client';
+import { readBrowseFilters, saveBrowseFilters } from '@/lib/navigation';
 import { DoubanItem, DoubanResult } from '@/lib/types';
 
 import DoubanCardSkeleton from '@/components/DoubanCardSkeleton';
@@ -71,7 +72,19 @@ function DoubanPageClient() {
 
   // 当type变化时重置选择器状态
   useEffect(() => {
-    if (type === 'custom' && customCategories.length > 0) {
+    const savedFilters = readBrowseFilters(type);
+    if (
+      savedFilters &&
+      (type !== 'custom' ||
+        customCategories.some(
+          (cat) =>
+            cat.type === savedFilters.primary &&
+            cat.query === savedFilters.secondary
+        ))
+    ) {
+      setPrimarySelection(savedFilters.primary);
+      setSecondarySelection(savedFilters.secondary);
+    } else if (type === 'custom' && customCategories.length > 0) {
       // 自定义分类模式：优先选择 movie，如果没有 movie 则选择 tv
       const types = Array.from(
         new Set(customCategories.map((cat) => cat.type))
@@ -332,15 +345,18 @@ function DoubanPageClient() {
             // 批量更新状态，避免多次触发数据加载
             setPrimarySelection(value);
             setSecondarySelection(firstCategory.query);
+            saveBrowseFilters(type, value, firstCategory.query);
           } else {
             setPrimarySelection(value);
+            saveBrowseFilters(type, value, secondarySelection);
           }
         } else {
           setPrimarySelection(value);
+          saveBrowseFilters(type, value, secondarySelection);
         }
       }
     },
-    [primarySelection, type, customCategories]
+    [primarySelection, secondarySelection, type, customCategories]
   );
 
   const handleSecondaryChange = useCallback(
@@ -349,9 +365,10 @@ function DoubanPageClient() {
       if (value !== secondarySelection) {
         setLoading(true);
         setSecondarySelection(value);
+        saveBrowseFilters(type, primarySelection, value);
       }
     },
-    [secondarySelection]
+    [secondarySelection, primarySelection, type]
   );
 
   const getPageTitle = () => {

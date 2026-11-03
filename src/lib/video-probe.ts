@@ -82,7 +82,7 @@ function probe(url: string, timeoutMs: number): Promise<VideoProbeResult> {
         status: playable ? 'playable' : reachable ? 'reachable' : 'unknown',
         latencyKind,
         message: playable
-          ? '首集预检可播放；测速为短时采样'
+          ? '目标集预检可播放；测速为短时采样'
           : reachable
           ? '已取得播放列表或分片，尚未确认解码；可尝试播放'
           : '浏览器预检未完成，可能受跨域、超时或格式影响；可尝试播放',

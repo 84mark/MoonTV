@@ -9,7 +9,7 @@ import React, {
   useState,
 } from 'react';
 
-import { speedKBps } from '@/lib/source-selection';
+import { measureSourceEpisodes, speedKBps } from '@/lib/source-selection';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/utils';
 import type { VideoProbeResult } from '@/lib/video-probe';
@@ -25,9 +25,16 @@ interface VideoInfo {
   message?: string;
 }
 
-function mergeVideoInfo(current: VideoInfo | undefined, incoming: VideoInfo): VideoInfo {
-  const live = incoming.message === '当前播放器已确认可播放'
-    ? incoming : current?.message === '当前播放器已确认可播放' ? current : null;
+function mergeVideoInfo(
+  current: VideoInfo | undefined,
+  incoming: VideoInfo
+): VideoInfo {
+  const live =
+    incoming.message === '当前播放器已确认可播放'
+      ? incoming
+      : current?.message === '当前播放器已确认可播放'
+      ? current
+      : null;
   if (!live || !current) return incoming;
   const timing = incoming.pingTime > 0 ? incoming : current;
   return {
@@ -35,7 +42,9 @@ function mergeVideoInfo(current: VideoInfo | undefined, incoming: VideoInfo): Vi
     quality: live.quality !== '未知' ? live.quality : incoming.quality,
     status: 'playable',
     message: live.message,
-    loadSpeed: !['未知', '未测得'].includes(incoming.loadSpeed) ? incoming.loadSpeed : current.loadSpeed,
+    loadSpeed: !['未知', '未测得'].includes(incoming.loadSpeed)
+      ? incoming.loadSpeed
+      : current.loadSpeed,
     pingTime: timing.pingTime,
     latencyKind: timing.latencyKind,
   };
@@ -62,6 +71,7 @@ interface EpisodeSelectorProps {
   /** 预计算的测速结果，避免重复测速 */
   precomputedVideoInfo?: Map<string, VideoInfo>;
   onAllSourcesUnavailable?: () => void;
+  probeEpisodeIndex?: number;
 }
 
 /**
@@ -81,6 +91,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   sourceSearchError = null,
   precomputedVideoInfo,
   onAllSourcesUnavailable,
+  probeEpisodeIndex = 0,
 }) => {
   const router = useRouter();
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
@@ -93,7 +104,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     new Set()
   );
 
-  const [completedSources, setCompletedSources] = useState<Set<string>>(new Set());
+  const [completedSources, setCompletedSources] = useState<Set<string>>(
+    new Set()
+  );
 
   // 使用 ref 来避免闭包问题
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
@@ -130,50 +143,65 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   }, [currentPage, descending, pageCount]);
 
   // 获取视频信息的函数 - 移除 attemptedSources 依赖避免不必要的重新创建
-  const getVideoInfo = useCallback(async (source: SearchResult, force = false) => {
-    const sourceKey = `${source.source}-${source.id}`;
+  const getVideoInfo = useCallback(
+    async (source: SearchResult, force = false) => {
+      const sourceKey = `${source.source}-${source.id}`;
 
-    // 使用 ref 获取最新的状态，避免闭包问题
-    if (!force && attemptedSourcesRef.current.has(sourceKey)) {
-      return;
-    }
+      // 使用 ref 获取最新的状态，避免闭包问题
+      if (!force && attemptedSourcesRef.current.has(sourceKey)) {
+        return;
+      }
 
-    const episodeUrl = source.episodes?.[0];
-    setCompletedSources((previous) => { const next = new Set(previous); next.delete(sourceKey); return next; });
-
-    // 标记为已尝试
-    setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-    attemptedSourcesRef.current.add(sourceKey);
-
-    try {
-      if (!episodeUrl) throw new Error('Missing playlist');
-      const info = await getVideoResolutionFromM3u8(episodeUrl, { force });
-      setVideoInfoMap((prev) => {
-        const current = prev.get(sourceKey);
-        return new Map(prev).set(sourceKey, mergeVideoInfo(current, info));
+      const episodeUrl = source.episodes?.[probeEpisodeIndex];
+      setCompletedSources((previous) => {
+        const next = new Set(previous);
+        next.delete(sourceKey);
+        return next;
       });
-    } catch (error) {
-      // 失败时保存错误状态
-      setVideoInfoMap((prev) =>
-        new Map(prev).set(sourceKey, {
-          quality: '未知',
-          loadSpeed: '未测得',
-          pingTime: 0,
-          status: 'unknown',
-          message: '预检未完成，可直接尝试播放',
-        })
-      );
-    } finally {
-      setCompletedSources((previous) => new Set(previous).add(sourceKey));
-    }
-  }, []);
+
+      // 标记为已尝试
+      setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+      attemptedSourcesRef.current.add(sourceKey);
+
+      try {
+        if (!episodeUrl) throw new Error('Missing playlist');
+        const info = await measureSourceEpisodes(
+          source,
+          (url) => getVideoResolutionFromM3u8(url, { force }),
+          probeEpisodeIndex
+        );
+        setVideoInfoMap((prev) => {
+          const current = prev.get(sourceKey);
+          return new Map(prev).set(sourceKey, mergeVideoInfo(current, info));
+        });
+      } catch (error) {
+        // 失败时保存错误状态
+        setVideoInfoMap((prev) =>
+          new Map(prev).set(sourceKey, {
+            quality: '未知',
+            loadSpeed: '未测得',
+            pingTime: 0,
+            status: 'unknown',
+            message: '预检未完成，可直接尝试播放',
+          })
+        );
+      } finally {
+        setCompletedSources((previous) => new Set(previous).add(sourceKey));
+      }
+    },
+    [probeEpisodeIndex]
+  );
 
   const previousPrecomputed = useRef<Map<string, VideoInfo>>(new Map());
 
   // 当有预计算结果时，先合并到videoInfoMap中
   useEffect(() => {
     if (precomputedVideoInfo && precomputedVideoInfo.size > 0) {
-      const updates = new Map(Array.from(precomputedVideoInfo).filter(([key, info]) => previousPrecomputed.current.get(key) !== info));
+      const updates = new Map(
+        Array.from(precomputedVideoInfo).filter(
+          ([key, info]) => previousPrecomputed.current.get(key) !== info
+        )
+      );
       previousPrecomputed.current = new Map(precomputedVideoInfo);
       // Do not replay stale measurements when a different background probe completes.
       setVideoInfoMap((prev) => {
@@ -187,7 +215,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       setAttemptedSources((prev) => {
         const newSet = new Set(prev);
         updates.forEach((info, key) => {
-          if (info.message !== '当前播放器已确认可播放' || speedKBps(info.loadSpeed) > 0) {
+          if (
+            info.message !== '当前播放器已确认可播放' ||
+            speedKBps(info.loadSpeed) > 0
+          ) {
             newSet.add(key);
           }
         });
@@ -197,14 +228,21 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       setCompletedSources((previous) => {
         const next = new Set(previous);
         updates.forEach((info, key) => {
-          if (info.message !== '当前播放器已确认可播放' || speedKBps(info.loadSpeed) > 0) next.add(key);
+          if (
+            info.message !== '当前播放器已确认可播放' ||
+            speedKBps(info.loadSpeed) > 0
+          )
+            next.add(key);
         });
         return next;
       });
 
       // 同步更新 ref，确保 getVideoInfo 能立即看到更新
       updates.forEach((info, key) => {
-        if (info.message !== '当前播放器已确认可播放' || speedKBps(info.loadSpeed) > 0) {
+        if (
+          info.message !== '当前播放器已确认可播放' ||
+          speedKBps(info.loadSpeed) > 0
+        ) {
           attemptedSourcesRef.current.add(key);
         }
       });
@@ -251,13 +289,30 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     // 依赖项保持与之前一致
   }, [activeTab, availableSources, getVideoInfo, optimizationEnabled]);
 
-  const checksComplete = optimizationEnabled && availableSources.length > 0 && availableSources.every((source) => completedSources.has(`${source.source}-${source.id}`));
+  const checksComplete =
+    optimizationEnabled &&
+    availableSources.length > 0 &&
+    availableSources.every((source) =>
+      completedSources.has(`${source.source}-${source.id}`)
+    );
   const visibleSources = [...availableSources]
-    .filter((source) => !checksComplete || speedKBps(videoInfoMap.get(`${source.source}-${source.id}`)?.loadSpeed) > 0)
-    .sort((a, b) => speedKBps(videoInfoMap.get(`${b.source}-${b.id}`)?.loadSpeed) - speedKBps(videoInfoMap.get(`${a.source}-${a.id}`)?.loadSpeed));
+    .filter(
+      (source) =>
+        (source.source === currentSource && source.id === currentId) ||
+        !checksComplete ||
+        speedKBps(
+          videoInfoMap.get(`${source.source}-${source.id}`)?.loadSpeed
+        ) > 0
+    )
+    .sort(
+      (a, b) =>
+        speedKBps(videoInfoMap.get(`${b.source}-${b.id}`)?.loadSpeed) -
+        speedKBps(videoInfoMap.get(`${a.source}-${a.id}`)?.loadSpeed)
+    );
 
   useEffect(() => {
-    if (checksComplete && visibleSources.length === 0) onAllSourcesUnavailable?.();
+    if (checksComplete && visibleSources.length === 0)
+      onAllSourcesUnavailable?.();
   }, [checksComplete, visibleSources.length, onAllSourcesUnavailable]);
 
   // 升序分页标签
@@ -468,8 +523,26 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       {activeTab === 'sources' && (
         <div className='flex flex-col h-full mt-4'>
           <div className='mb-3 flex items-center justify-between gap-2 text-xs text-gray-500'>
-            <span>{checksComplete ? '首集采样 · 按速度从快到慢排序' : optimizationEnabled ? '首集采样 · 检测完成后隐藏无速度的源' : '测速已关闭'}</span>
-            <button disabled={optimizationEnabled && !checksComplete} className='shrink-0 text-blue-600 disabled:opacity-40' onClick={() => { setVideoInfoMap(new Map()); setCompletedSources(new Set()); void Promise.all(availableSources.map(source => getVideoInfo(source, true))); }}>重新检测</button>
+            <span>
+              {checksComplete
+                ? `第 ${probeEpisodeIndex + 1} 集及下一集 · 按速度排序`
+                : optimizationEnabled
+                ? `第 ${probeEpisodeIndex + 1} 集及下一集 · 测速中`
+                : '测速已关闭'}
+            </span>
+            <button
+              disabled={optimizationEnabled && !checksComplete}
+              className='shrink-0 text-blue-600 disabled:opacity-40'
+              onClick={() => {
+                setVideoInfoMap(new Map());
+                setCompletedSources(new Set());
+                void Promise.all(
+                  availableSources.map((source) => getVideoInfo(source, true))
+                );
+              }}
+            >
+              重新检测
+            </button>
           </div>
           {sourceSearchLoading && (
             <div className='flex items-center justify-center py-8'>
@@ -504,41 +577,83 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               </div>
             )}
 
-          {checksComplete && visibleSources.length === 0 && <p role='status' className='py-8 text-center text-sm text-gray-500'>当前所有源均不可用</p>}
+          {checksComplete && visibleSources.length === 0 && (
+            <p role='status' className='py-8 text-center text-sm text-gray-500'>
+              当前所有源均不可用
+            </p>
+          )}
 
           {!sourceSearchLoading &&
             !sourceSearchError &&
             availableSources.length > 0 && (
               <div className='flex-1 overflow-y-auto space-y-2 pb-20'>
-                {visibleSources
-                  .map((source) => {
-                    const sourceKey = `${source.source}-${source.id}`;
-                    const info = videoInfoMap.get(sourceKey);
-                    const isCurrentSource = source.source?.toString() === currentSource?.toString() && source.id?.toString() === currentId?.toString();
-                    const status = info?.status === 'playable' ? '播放已确认' : info?.status === 'reachable' ? '接口可达' : info ? '预检未确认' : optimizationEnabled ? '检测中…' : '未检测';
-                    return (
-                      <button
-                        type='button'
-                        key={sourceKey}
-                        aria-pressed={isCurrentSource}
-                        aria-label={`${isCurrentSource ? '当前源' : '切换到'} ${source.source_name}`}
-                        title={info?.message || '点击切换播放源'}
-                        onClick={() => !isCurrentSource && handleSourceClick(source)}
-                        className={`grid w-full grid-cols-2 items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-left transition-colors ${isCurrentSource ? 'border-blue-500 bg-blue-500/10 dark:bg-blue-500/20' : 'border-gray-200 hover:border-blue-500/60 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-white/5'}`}
+                {visibleSources.map((source) => {
+                  const sourceKey = `${source.source}-${source.id}`;
+                  const info = videoInfoMap.get(sourceKey);
+                  const isCurrentSource =
+                    source.source?.toString() === currentSource?.toString() &&
+                    source.id?.toString() === currentId?.toString();
+                  const status =
+                    info?.status === 'playable'
+                      ? '播放已确认'
+                      : info?.status === 'reachable'
+                      ? '接口可达'
+                      : info
+                      ? '预检未确认'
+                      : optimizationEnabled
+                      ? '检测中…'
+                      : '未检测';
+                  return (
+                    <button
+                      type='button'
+                      key={sourceKey}
+                      aria-pressed={isCurrentSource}
+                      aria-label={`${isCurrentSource ? '当前源' : '切换到'} ${
+                        source.source_name
+                      }`}
+                      title={info?.message || '点击切换播放源'}
+                      onClick={() =>
+                        !isCurrentSource && handleSourceClick(source)
+                      }
+                      className={`grid w-full grid-cols-2 items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-left transition-colors ${
+                        isCurrentSource
+                          ? 'border-green-500 bg-green-500/15 ring-1 ring-green-500/40 dark:bg-green-500/20'
+                          : 'border-gray-200 hover:border-blue-500/60 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      <span className='col-span-2 min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100'>
+                        {source.source_name}
+                        {isCurrentSource && (
+                          <span className='ml-2 text-xs text-green-700 dark:text-green-400'>
+                            当前
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={`col-span-2 text-xs ${
+                          info?.status === 'playable'
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-gray-500'
+                        }`}
                       >
-                        <span className='col-span-2 min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100'>
-                          {source.source_name}{isCurrentSource && <span className='ml-2 text-xs text-blue-600 dark:text-blue-400'>当前</span>}
-                        </span>
-                        <span className={`col-span-2 text-xs ${info?.status === 'playable' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                          {info?.quality && info.quality !== '未知' ? `${info.quality} · ` : ''}{status}
-                        </span>
-                        <span className='whitespace-nowrap text-[11px] text-gray-500'>速度 {info?.loadSpeed || '未测得'}</span>
-                        <span className='whitespace-nowrap text-right text-[11px] text-gray-500'>
-                          {info && info.pingTime > 0 ? `${info.latencyKind === 'metadata' ? '准备' : '响应'} ${info.pingTime} ms` : '响应未测得'}
-                        </span>
-                      </button>
-                    );
-                  })}
+                        {info?.quality && info.quality !== '未知'
+                          ? `${info.quality} · `
+                          : ''}
+                        {status}
+                      </span>
+                      <span className='whitespace-nowrap text-[11px] text-gray-500'>
+                        速度 {info?.loadSpeed || '未测得'}
+                      </span>
+                      <span className='whitespace-nowrap text-right text-[11px] text-gray-500'>
+                        {info && info.pingTime > 0
+                          ? `${
+                              info.latencyKind === 'metadata' ? '准备' : '响应'
+                            } ${info.pingTime} ms`
+                          : '响应未测得'}
+                      </span>
+                    </button>
+                  );
+                })}
                 <div className='flex-shrink-0 mt-auto pt-2 border-t border-gray-400 dark:border-gray-700'>
                   <button
                     onClick={() => {

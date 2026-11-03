@@ -396,9 +396,10 @@ a {
 .dark .episode-panel [aria-pressed] {
   background: rgba(255, 255, 255, 0.025);
 }
-.episode-panel [aria-pressed='true'] {
-  background: rgba(76, 143, 248, 0.1);
-  border-color: rgba(76, 143, 248, 0.55);
+.episode-panel [aria-pressed='true'],
+.dark .episode-panel [aria-pressed='true'] {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.75);
 }
 .player-frame {
   overflow: hidden;
