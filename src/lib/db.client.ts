@@ -15,6 +15,7 @@
  */
 
 import { getAuthInfoFromBrowserCookie } from './auth';
+import { mergePlayRecords } from './play-records';
 import { SkipConfig } from './types';
 
 // 全局错误触发函数
@@ -495,7 +496,16 @@ export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
   try {
     const raw = localStorage.getItem(PLAY_RECORDS_KEY);
     if (!raw) return {};
-    return JSON.parse(raw) as Record<string, PlayRecord>;
+    const records = JSON.parse(raw) as Record<string, PlayRecord>;
+    const merged = mergePlayRecords(records);
+    if (Object.keys(merged).length !== Object.keys(records).length) {
+      try {
+        localStorage.setItem(PLAY_RECORDS_KEY, JSON.stringify(merged));
+      } catch (error) {
+        console.warn('合并记录暂未写入本地存储:', error);
+      }
+    }
+    return merged;
   } catch (err) {
     console.error('读取播放记录失败:', err);
     triggerGlobalError('读取播放记录失败');
@@ -552,8 +562,12 @@ export async function savePlayRecord(
   }
 
   try {
-    const allRecords = await getAllPlayRecords();
-    allRecords[key] = record;
+    // Read and write synchronously so overlapping saves cannot restore stale duplicates.
+    const raw = localStorage.getItem(PLAY_RECORDS_KEY);
+    const allRecords = mergePlayRecords({
+      ...(raw ? JSON.parse(raw) : {}),
+      [key]: record,
+    });
     localStorage.setItem(PLAY_RECORDS_KEY, JSON.stringify(allRecords));
     window.dispatchEvent(
       new CustomEvent('playRecordsUpdated', {

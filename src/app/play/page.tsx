@@ -26,9 +26,10 @@ import {
   requestedEpisode,
   storedEpisode,
 } from '@/lib/episode-progress';
+import { findPlayRecord } from '@/lib/play-records';
 import { getPreparedPlayback } from '@/lib/playback-preload';
 import { DownloadMeter } from '@/lib/playback-stats';
-import { measureSourceEpisodes, speedKBps } from '@/lib/source-selection';
+import { firstMeasuredSource } from '@/lib/source-selection';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 import { qualityForWidth, VideoProbeResult } from '@/lib/video-probe';
@@ -36,6 +37,9 @@ import { qualityForWidth, VideoProbeResult } from '@/lib/video-probe';
 import DoubanComments from '@/components/DoubanComments';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
+import PlaybackStartup, {
+  usePlaybackStartup,
+} from '@/components/PlaybackStartup';
 import PlaybackStats from '@/components/PlaybackStats';
 
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
@@ -48,6 +52,7 @@ declare global {
 function PlayPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const startup = usePlaybackStartup();
 
   // -----------------------------------------------------------------------------
   // 状态变量（State）
@@ -229,27 +234,17 @@ function PlayPageClient() {
     sources: SearchResult[]
   ): Promise<SearchResult | null> => {
     const index = currentEpisodeIndexRef.current;
-    const measured = await Promise.all(
-      sources.map(async (source) => {
-        const result = await measureSourceEpisodes(
-          source,
-          (url) => getVideoResolutionFromM3u8(url),
-          index
-        );
+    return firstMeasuredSource(
+      sources,
+      (url) => getVideoResolutionFromM3u8(url),
+      (source, result) => {
         setMeasuredEpisodeIndex(index);
         setPrecomputedVideoInfo((previous) =>
           new Map(previous).set(`${source.source}-${source.id}`, result)
         );
-        return { source, result };
-      })
-    );
-    return (
-      measured
-        .filter((item) => speedKBps(item.result.loadSpeed) > 0)
-        .sort(
-          (a, b) =>
-            speedKBps(b.result.loadSpeed) - speedKBps(a.result.loadSpeed)
-        )[0]?.source || null
+      },
+      index,
+      true
     );
   };
 
@@ -523,6 +518,7 @@ function PlayPageClient() {
           : '🔍 正在搜索播放源...'
       );
 
+      startup.mark('读取观看记录');
       // Resolve legacy source-specific records before probing or creating the player.
       let records: Awaited<ReturnType<typeof getAllPlayRecords>> = {};
       try {
@@ -530,29 +526,15 @@ function PlayPageClient() {
       } catch {
         /* Cookie resume still works offline. */
       }
-      if (
-        !searchParams.has('episode') &&
-        storedEpisode(videoTitle, videoYear) === undefined
-      ) {
-        const legacy = records[generateStorageKey(currentSource, currentId)];
-        if (legacy && Number.isSafeInteger(legacy.index) && legacy.index > 0) {
-          currentEpisodeIndexRef.current = legacy.index - 1;
-          setCurrentEpisodeIndex(legacy.index - 1);
-        }
-      }
       const candidate = getPreparedPlayback(searchParams.get('preload'));
-      const prepared =
-        candidate?.snapshot.episodeIndex === currentEpisodeIndexRef.current
-          ? candidate
-          : null;
+      const prepared = candidate;
       let sourcesInfo: SearchResult[];
       if (prepared && prepared.snapshot.sources.length > 0) {
         sourcesInfo = prepared.snapshot.sources;
         setAvailableSources(sourcesInfo);
-        setPrecomputedVideoInfo(new Map(prepared.snapshot.results));
-        setMeasuredEpisodeIndex(currentEpisodeIndexRef.current);
         setSourceSearchLoading(false);
       } else {
+        startup.mark('查找播放源');
         sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
       }
       if (
@@ -562,6 +544,7 @@ function PlayPageClient() {
           (source) => source.source === currentSource && source.id === currentId
         )
       ) {
+        startup.mark('获取片源详情');
         sourcesInfo = await fetchSourceDetail(currentSource, currentId);
       }
       if (sourcesInfo.length === 0) {
@@ -570,6 +553,25 @@ function PlayPageClient() {
         return;
       }
 
+      if (
+        !searchParams.has('episode') &&
+        storedEpisode(videoTitle, videoYear) === undefined
+      ) {
+        const legacy =
+          findPlayRecord(records, {
+            title: videoTitle || sourcesInfo[0].title,
+            year: videoYear || sourcesInfo[0].year,
+            total_episodes: sourcesInfo[0].episodes.length,
+          }) || records[generateStorageKey(currentSource, currentId)];
+        if (legacy && Number.isSafeInteger(legacy.index) && legacy.index > 0) {
+          currentEpisodeIndexRef.current = legacy.index - 1;
+          setCurrentEpisodeIndex(legacy.index - 1);
+        }
+      }
+      if (prepared?.snapshot.episodeIndex === currentEpisodeIndexRef.current) {
+        setPrecomputedVideoInfo(new Map(prepared.snapshot.results));
+        setMeasuredEpisodeIndex(currentEpisodeIndexRef.current);
+      }
       let detailData: SearchResult = sourcesInfo[0];
       // 指定源和id且无需优选
       if (currentSource && currentId && !needPreferRef.current) {
@@ -594,9 +596,10 @@ function PlayPageClient() {
         setLoadingMessage(
           `⚡ 正在检测第 ${
             currentEpisodeIndexRef.current + 1
-          } 集及下一集，优选播放源...`
+          } 集，找到可播放片源后立即开始...`
         );
 
+        startup.mark('检测当前集可用片源');
         const preferred = await preferBestSource(sourcesInfo);
         if (!preferred) {
           setError('当前所有源均不可用');
@@ -606,8 +609,11 @@ function PlayPageClient() {
         detailData = preferred;
       }
 
-      const history =
-        records[generateStorageKey(detailData.source, detailData.id)];
+      const history = findPlayRecord(records, {
+        title: detailData.title,
+        year: detailData.year,
+        total_episodes: detailData.episodes.length,
+      });
       if (history?.index === currentEpisodeIndexRef.current + 1)
         resumeTimeRef.current = history.play_time;
       console.log(detailData.source, detailData.id);
@@ -634,6 +640,7 @@ function PlayPageClient() {
       newUrl.searchParams.delete('prefer');
       window.history.replaceState(window.history.state, '', newUrl.toString());
 
+      startup.mark('创建播放器');
       setLoadingStage('ready');
       setLoadingMessage('✨ 准备就绪，即将开始播放...');
 
@@ -1107,6 +1114,7 @@ function PlayPageClient() {
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
       Artplayer.USE_RAF = true;
 
+      startup.mark('加载播放列表');
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
         url: videoUrl,
@@ -1181,6 +1189,12 @@ function PlayPageClient() {
             );
             hls.on(Hls.Events.FRAG_LOADED, (_, data) =>
               downloadMeter.track(data.frag.stats)
+            );
+            hls.on(Hls.Events.MANIFEST_PARSED, () =>
+              startup.mark('下载视频分片')
+            );
+            hls.on(Hls.Events.FRAG_LOADED, () =>
+              startup.mark('等待解码与播放')
             );
             hls.loadSource(url);
             hls.attachMedia(video);
@@ -1328,6 +1342,7 @@ function PlayPageClient() {
         video: artPlayerRef.current.video,
       });
       artPlayerRef.current.on('video:playing', () => {
+        startup.mark('画面已播放');
         rememberEpisode(
           videoTitleRef.current,
           videoYearRef.current,
@@ -1509,7 +1524,9 @@ function PlayPageClient() {
             <p role='status' className='text-base font-medium'>
               {loadingMessage.replace(/🎬|🔍|⚡|✨/g, '').trim()}
             </p>
-            <p className='mt-3 text-sm text-gray-500'>正在准备播放</p>
+            <div className='mt-5 text-left'>
+              <PlaybackStartup steps={startup.steps} />
+            </div>
           </div>
         </div>
       </PageLayout>
@@ -1584,6 +1601,7 @@ function PlayPageClient() {
             )}
           </h1>
         </div>
+        <PlaybackStartup steps={startup.steps} />
         {/* 第二行：播放器和选集 */}
         <div className='space-y-2'>
           {/* 折叠控制 - 仅在 lg 及以上屏幕显示 */}

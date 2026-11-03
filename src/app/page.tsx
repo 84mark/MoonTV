@@ -14,6 +14,7 @@ import {
   subscribeToDataUpdates,
 } from '@/lib/db.client';
 import { getDoubanCategories } from '@/lib/douban.client';
+import { findPlayRecord } from '@/lib/play-records';
 import { DoubanItem } from '@/lib/types';
 
 import CapsuleSwitch from '@/components/CapsuleSwitch';
@@ -109,7 +110,7 @@ function HomeClient() {
         const id = key.slice(plusIndex + 1);
 
         // 查找对应的播放记录，获取当前集数
-        const playRecord = allPlayRecords[key];
+        const playRecord = findPlayRecord(allPlayRecords, fav);
         const currentEpisode = playRecord?.index;
 
         return {

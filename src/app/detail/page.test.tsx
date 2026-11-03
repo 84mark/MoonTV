@@ -145,7 +145,9 @@ it('puts playable episode links beside the poster and retains the original categ
   );
   expect(url.searchParams.get('episode')).toBe('3');
   expect(url.searchParams.get('prefer')).toBe('true');
-  expect(url.searchParams.has('preload')).toBe(false);
+  expect(url.searchParams.get('preload')).toBe('fixture');
+  expect(episode).toHaveTextContent(/^3$/);
+  expect(screen.queryByRole('link', { name: /立即播放/ })).toBeNull();
   expect(screen.getByRole('link', { name: /返回浏览/ })).toHaveAttribute(
     'href',
     '/douban?type=tv'

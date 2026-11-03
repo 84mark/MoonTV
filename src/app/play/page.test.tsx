@@ -3,9 +3,12 @@ import type { ReactNode } from 'react';
 
 import { getAllPlayRecords } from '@/lib/db.client';
 import { rememberEpisode } from '@/lib/episode-progress';
+import { getPreparedPlayback } from '@/lib/playback-preload';
 import { getVideoResolutionFromM3u8 } from '@/lib/utils';
 
 import PlayPage from './page';
+
+jest.mock('@/lib/playback-preload', () => ({ getPreparedPlayback: jest.fn() }));
 
 let query = '';
 const mockPlayer = jest.fn();
@@ -71,6 +74,7 @@ beforeEach(() => {
   document.cookie = 'moontv_episodes=; Max-Age=0; Path=/';
   localStorage.clear();
   mockPlayer.mockClear();
+  (getPreparedPlayback as jest.Mock).mockReturnValue(null);
   global.fetch = jest
     .fn()
     .mockResolvedValue({ ok: true, json: async () => ({ results: [a, b] }) });
@@ -88,19 +92,19 @@ beforeEach(() => {
       message: '',
     }));
 });
-it('honors a clicked episode over old history and chooses the fastest source using that episode and the next', async () => {
+it('honors a clicked episode over old history and starts with the first measured current episode without waiting for the next', async () => {
   query = 'title=剧集&year=2026&source=a&id=1&prefer=true&episode=3';
   render(<PlayPage />);
   await waitFor(() =>
     expect(mockPlayer).toHaveBeenCalledWith(
-      expect.objectContaining({ url: 'b3' })
+      expect.objectContaining({ url: 'a3' })
     )
   );
   expect(
     (getVideoResolutionFromM3u8 as jest.Mock).mock.calls
       .map((call) => call[0])
       .sort()
-  ).toEqual(['a3', 'a4', 'b3', 'b4']);
+  ).toEqual(['a3', 'b3']);
   expect(screen.getByRole('heading', { name: /第 3 集/ })).toBeInTheDocument();
 });
 it('uses the remembered episode across source changes rather than the first source old record', async () => {
@@ -109,7 +113,47 @@ it('uses the remembered episode across source changes rather than the first sour
   render(<PlayPage />);
   await waitFor(() =>
     expect(mockPlayer).toHaveBeenCalledWith(
-      expect.objectContaining({ url: 'b3' })
+      expect.objectContaining({ url: 'a3' })
+    )
+  );
+});
+
+it('reuses discovered sources for a different clicked episode without reusing old measurements or searching again', async () => {
+  query = 'title=剧集&year=2026&source=a&id=1&episode=3&preload=handoff';
+  (getPreparedPlayback as jest.Mock).mockReturnValue({
+    snapshot: {
+      sources: [a, b],
+      episodeIndex: 0,
+      results: new Map(),
+      selected: a,
+    },
+  });
+  render(<PlayPage />);
+  await waitFor(() =>
+    expect(mockPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'a3' })
+    )
+  );
+  expect(fetch).not.toHaveBeenCalled();
+  expect(getVideoResolutionFromM3u8).not.toHaveBeenCalled();
+});
+
+it('restores the latest merged episode even when the current source has no history key or episode cookie', async () => {
+  query = 'title=剧集&year=2026&source=a&id=1';
+  (getAllPlayRecords as jest.Mock).mockResolvedValue({
+    'b+1': {
+      title: '剧集',
+      year: '2026',
+      total_episodes: 4,
+      index: 3,
+      play_time: 50,
+      save_time: 200,
+    },
+  });
+  render(<PlayPage />);
+  await waitFor(() =>
+    expect(mockPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'a3' })
     )
   );
 });

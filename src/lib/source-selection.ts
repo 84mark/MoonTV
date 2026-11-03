@@ -49,7 +49,8 @@ export function firstMeasuredSource(
   sources: SearchResult[],
   probe: (url: string) => Promise<VideoProbeResult>,
   onResult: (source: SearchResult, result: VideoProbeResult) => void,
-  episodeIndex = 0
+  episodeIndex = 0,
+  currentOnly = false
 ): Promise<SearchResult | null> {
   return new Promise((resolve) => {
     if (!sources.length) {
@@ -59,9 +60,17 @@ export function firstMeasuredSource(
     let remaining = sources.length;
     for (const source of sources) {
       void (async () => {
-        const result = await measureSourceEpisodes(source, probe, episodeIndex);
+        const result = currentOnly
+          ? await (source.episodes[episodeIndex]
+              ? probe(source.episodes[episodeIndex]).catch(unmeasured)
+              : Promise.resolve(unmeasured()))
+          : await measureSourceEpisodes(source, probe, episodeIndex);
         onResult(source, result);
-        if (speedKBps(result.loadSpeed) > 0) resolve(source);
+        if (
+          speedKBps(result.loadSpeed) > 0 ||
+          (currentOnly && result.status === 'playable')
+        )
+          resolve(source);
         if (--remaining === 0) resolve(null);
       })();
     }

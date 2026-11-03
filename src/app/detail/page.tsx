@@ -157,6 +157,7 @@ function DetailPageClient() {
   playParams.set('episode', String(episodeIndex + 1));
   const episodeSource = prepared?.selected || source || prepared?.sources[0];
   const playbackLink = `/play?${playParams}`;
+  const hasEpisodes = (episodeSource?.episodes?.length || 0) > 1;
 
   return (
     <PageLayout activePath='/'>
@@ -224,21 +225,22 @@ function DetailPageClient() {
                 主演：{subject.actors.join(' / ')}
               </p>
             ) : null}
-            {noPlayableSource ? (
-              <button
-                disabled
-                className='mt-6 inline-flex items-center gap-2 rounded-xl bg-gray-300 px-7 py-3 font-semibold text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-              >
-                ▶ 暂无可用片源
-              </button>
-            ) : (
-              <Link
-                href={playbackLink}
-                className='mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-blue-700'
-              >
-                ▶ 立即播放
-              </Link>
-            )}
+            {!hasEpisodes &&
+              (noPlayableSource ? (
+                <button
+                  disabled
+                  className='mt-6 inline-flex items-center gap-2 rounded-xl bg-gray-300 px-7 py-3 font-semibold text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                >
+                  ▶ 暂无可用片源
+                </button>
+              ) : (
+                <Link
+                  href={playbackLink}
+                  className='mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-blue-700'
+                >
+                  ▶ 立即播放
+                </Link>
+              ))}
             <div className='mt-3 text-xs text-gray-500' aria-live='polite'>
               {noPlayableSource ? (
                 <>
@@ -276,45 +278,44 @@ function DetailPageClient() {
                 </span>
               )}
             </div>
-            {episodeSource && episodeSource.episodes?.length > 1 && (
-              <div className='mt-6' aria-label='剧集选集'>
-                <h2 className='mb-3 text-sm font-semibold'>
-                  选集 · 共 {episodeSource.episodes.length} 集
-                </h2>
-                {episodeIndex > 0 && (
-                  <p className='mb-3 text-xs text-gray-500'>
-                    上次观看至第 {episodeIndex + 1} 集
-                  </p>
-                )}
-                <div className='grid max-h-60 grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2 overflow-y-auto pr-1'>
-                  {episodeSource.episodes.map((_, index) => {
-                    const params = new URLSearchParams(playParams);
-                    params.set('episode', String(index + 1));
-                    // A different episode must not reuse measurements from the remembered one.
-                    if (index !== episodeIndex) {
-                      params.delete('preload');
-                      params.set('prefer', 'true');
-                    }
-                    return (
-                      <Link
-                        key={index}
-                        href={`/play?${params}`}
-                        aria-label={`播放第 ${index + 1} 集`}
-                        className={`rounded-lg border px-2 py-2 text-center text-sm ${
-                          index === episodeIndex
-                            ? 'border-green-500 bg-green-500/10 text-green-700 dark:text-green-400'
-                            : 'border-gray-200 hover:border-green-500 dark:border-gray-700'
-                        }`}
-                      >
-                        第 {index + 1} 集
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </section>
+        {hasEpisodes && episodeSource && (
+          <section className='glass-panel detail-section' aria-label='剧集选集'>
+            <h2 className='mb-3 text-sm font-semibold'>
+              选集 · 共 {episodeSource.episodes.length} 集
+            </h2>
+            {episodeIndex > 0 && (
+              <p className='mb-3 text-xs text-gray-500'>
+                上次观看至第 {episodeIndex + 1} 集
+              </p>
+            )}
+            <p className='mb-4 text-xs text-gray-500'>点击集数播放</p>
+            <div className='grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-2'>
+              {episodeSource.episodes.map((_, index) => {
+                const params = new URLSearchParams(playParams);
+                params.set('episode', String(index + 1));
+                // Retain discovered sources across episodes; measurements remain episode-specific.
+                if (prepared?.selected) params.delete('prefer');
+                else params.set('prefer', 'true');
+                return (
+                  <Link
+                    key={index}
+                    href={`/play?${params}`}
+                    aria-label={`播放第 ${index + 1} 集`}
+                    className={`flex min-h-[44px] items-center justify-center rounded-xl border px-2 py-2 text-center text-sm font-medium transition-colors ${
+                      index === episodeIndex
+                        ? 'border-green-500 bg-green-500/10 text-green-700 dark:text-green-400'
+                        : 'border-gray-200 hover:border-green-500 dark:border-gray-700'
+                    }`}
+                  >
+                    {index + 1}
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
         <section className='glass-panel detail-section'>
           <h2 className='mb-4 text-xl font-semibold'>剧情简介</h2>
           {intro ? (

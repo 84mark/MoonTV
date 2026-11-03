@@ -128,3 +128,26 @@ it('does not reject a measured current episode solely because the successor prob
     '未测得'
   );
 });
+
+it('starts a measured current episode while another source remains pending and never probes the successor on the startup path', async () => {
+  const slow = deferred();
+  const probe = jest.fn((url: string) =>
+    url === 'slow-current' ? slow.promise : Promise.resolve(result('1 MB/s'))
+  );
+  const selected = firstMeasuredSource(
+    [
+      { ...source('slow'), episodes: ['slow-current', 'slow-next'] },
+      { ...source('ready'), episodes: ['ready-current', 'ready-next'] },
+    ],
+    probe,
+    jest.fn(),
+    0,
+    true
+  );
+  await expect(selected).resolves.toMatchObject({ id: 'ready' });
+  expect(probe.mock.calls.map((call) => call[0])).toEqual([
+    'slow-current',
+    'ready-current',
+  ]);
+  slow.resolve(result('10 MB/s'));
+});
