@@ -13,6 +13,7 @@ import KidsPage from './page';
 
 let query = 'kind=tv';
 const replace = jest.fn();
+const push = jest.fn();
 const observers: Array<{
   callback: IntersectionObserverCallback;
   observe: jest.Mock;
@@ -25,7 +26,7 @@ const resourceCalls = () =>
   );
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ replace, push }),
   useSearchParams: () => new URLSearchParams(query),
 }));
 jest.mock('@/components/PageLayout', () => ({
@@ -69,6 +70,9 @@ const variants = [
 beforeEach(() => {
   query = 'kind=tv';
   replace.mockClear();
+  push.mockClear();
+  localStorage.clear();
+  window.history.replaceState({}, '', `/kids?${query}`);
   observers.length = 0;
   global.IntersectionObserver = jest.fn((callback, options) => {
     const observer = {
@@ -98,42 +102,41 @@ it('shows actual posters and separates language versions of the same animation',
     render(<KidsPage />);
   });
   expect(
-    await screen.findByRole('button', {
-      name: '选择 小猪佩奇 第一季 国语版 · 普通话',
+    await screen.findByRole('link', {
+      name: '查看 小猪佩奇 第一季 国语版 的详情',
     })
   ).toBeInTheDocument();
   expect(
-    screen.getByRole('button', { name: '选择 小猪佩奇 第一季 英语版 · 英语' })
+    screen.getByRole('link', { name: '查看 小猪佩奇 第一季 英语版 的详情' })
   ).toBeInTheDocument();
-  expect(screen.getByAltText('小猪佩奇 第一季 英语版海报')).toHaveAttribute(
-    'src',
-    expect.stringContaining('/api/image?url=')
-  );
-  expect(screen.getByAltText('小猪佩奇 第一季 英语版海报')).toHaveAttribute(
-    'referrerpolicy',
-    'no-referrer'
-  );
+  expect(
+    decodeURIComponent(
+      screen.getByAltText('小猪佩奇 第一季 英语版').getAttribute('src') || ''
+    )
+  ).toContain('/api/image?url=');
+
   expect(screen.queryByRole('button', { name: /岁/ })).toBeNull();
 });
-it('preserves the chosen audio version and exact source on the detail link', async () => {
-  await act(async () => {
-    render(<KidsPage />);
-  });
+it('opens shared details directly without a version or source picker', async () => {
+  render(<KidsPage />);
   fireEvent.click(
-    await screen.findByRole('button', {
-      name: '选择 小猪佩奇 第一季 英语版 · 英语',
+    await screen.findByRole('link', {
+      name: '查看 小猪佩奇 第一季 英语版 的详情',
     })
   );
-  expect(screen.getByRole('dialog')).toBeInTheDocument();
-  const link = screen.getByRole('link', { name: /就看这个版本/ });
-  const href = new URL(link.getAttribute('href') || '', 'https://test.local');
+  expect(push).toHaveBeenCalledTimes(1);
+  const href = new URL(push.mock.calls[0][0], 'https://test.local');
+  expect(href.pathname).toBe('/detail');
   expect(href.searchParams.get('source')).toBe('source-en');
   expect(href.searchParams.get('id')).toBe('en');
+  expect(href.searchParams.get('stitle')).toBe('小猪佩奇');
+  expect(href.searchParams.get('title')).toBe('小猪佩奇 第一季 英语版');
+  expect(href.searchParams.get('stype')).toBe('tv');
   expect(href.searchParams.get('kids_language')).toBe('en');
   expect(href.searchParams.get('kids_id')).toBe('peppa');
   expect(href.searchParams.get('returnTo')).toBe('/kids?kind=tv');
-  fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByText('就看这个版本')).toBeNull();
 });
 it('marks unlabeled versions as unconfirmed and never invents a default language', async () => {
   (fetch as jest.Mock).mockImplementation(async (input) => {
@@ -161,8 +164,8 @@ it('marks unlabeled versions as unconfirmed and never invents a default language
     render(<KidsPage />);
   });
   expect(
-    await screen.findByRole('button', {
-      name: '选择 小猪佩奇 第一季 国语版 · 语言待确认',
+    await screen.findByRole('link', {
+      name: '查看 小猪佩奇 第一季 国语版 的详情',
     })
   ).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '普通话' })).toBeNull();
@@ -201,7 +204,7 @@ it('limits the initial resource pool search to two concurrent requests', async (
   ).toHaveLength(2);
 });
 
-it('keeps seasons in the version picker instead of repeating the same language poster', async () => {
+it('makes every season directly accessible without a version picker', async () => {
   (fetch as jest.Mock).mockImplementation(async (input) => {
     const url = new URL(String(input), 'https://test.local');
     return {
@@ -229,12 +232,15 @@ it('keeps seasons in the version picker instead of repeating the same language p
     render(<KidsPage />);
   });
   expect(
-    await screen.findAllByRole('button', { name: /^选择 .* · 英语$/ })
-  ).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: /^选择 .* · 英语$/ }));
-  expect(
-    screen.getByRole('button', { name: '英语 · 第2季' })
-  ).toBeInTheDocument();
+    await screen.findAllByRole('link', { name: /^查看 .*英语版 的详情$/ })
+  ).toHaveLength(2);
+  fireEvent.click(
+    screen.getByRole('link', { name: '查看 小猪佩奇 第二季 英语版 的详情' })
+  );
+  const href = new URL(push.mock.calls[0][0], 'https://test.local');
+  expect(href.searchParams.get('title')).toBe('小猪佩奇 第二季 英语版');
+  expect(href.searchParams.get('kids_language')).toBe('en');
+  expect(screen.queryByRole('dialog')).toBeNull();
 });
 
 it('keeps search without parent or rediscovery sections', async () => {
@@ -284,11 +290,53 @@ it('debounces search and only discovers titles matching the latest query', async
   const input = screen.getByRole('textbox', { name: '搜索动画' });
   fireEvent.change(input, { target: { value: '花园' } });
   fireEvent.change(input, { target: { value: '佩奇' } });
-  await screen.findByRole('button', {
-    name: '选择 小猪佩奇 第一季 英语版 · 英语',
+  await screen.findByRole('link', {
+    name: '查看 小猪佩奇 第一季 英语版 的详情',
   });
   expect(resourceCalls()).toHaveLength(1);
   expect(String(resourceCalls()[0][0])).toContain('id=peppa');
   fireEvent.click(screen.getByRole('button', { name: '清除搜索' }));
   await waitFor(() => expect(resourceCalls()).toHaveLength(25));
+});
+
+it('opens animation movies through shared details with a discovered fallback', async () => {
+  query = 'kind=movie';
+  window.history.replaceState({}, '', '/kids?kind=movie');
+  const movie = KIDS_TITLES.find((item) => item.kind === 'movie');
+  if (!movie) throw new Error('Missing movie fixture');
+  (fetch as jest.Mock).mockImplementation(async (input) => {
+    const url = new URL(String(input), 'https://test.local');
+    return {
+      ok: true,
+      json: async () =>
+        url.pathname === '/api/kids'
+          ? {
+              variants:
+                url.searchParams.get('id') === movie.id
+                  ? [
+                      {
+                        ...variants[0],
+                        title: movie.name,
+                        kind: 'movie',
+                        season: '',
+                      },
+                    ]
+                  : [],
+            }
+          : { subject: { poster } },
+    };
+  });
+  render(<KidsPage />);
+  fireEvent.click(
+    await screen.findByRole('link', { name: `查看 ${movie.name} 的详情` })
+  );
+  const href = new URL(push.mock.calls[0][0], 'https://test.local');
+  expect(href.pathname).toBe('/detail');
+  expect(href.searchParams.get('stype')).toBe('movie');
+  expect(href.searchParams.get('kids_id')).toBe(movie.id);
+  expect(href.searchParams.get('kids_language')).toBe('zh-CN');
+  expect(href.searchParams.get('source')).toBe('source-zh');
+  expect(href.searchParams.get('id')).toBe('zh');
+  expect(href.searchParams.get('returnTo')).toBe('/kids?kind=movie');
+  expect(screen.queryByRole('dialog')).toBeNull();
 });

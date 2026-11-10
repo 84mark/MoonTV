@@ -230,9 +230,13 @@ export default function VideoCard({
     if (from === 'douban') {
       router.push(
         `/detail?title=${encodeURIComponent(actualTitle.trim())}${
-          actualYear ? `&year=${actualYear}` : ''
-        }${
+          actualSource && actualId
+            ? `&${new URLSearchParams({ source: actualSource, id: actualId })}`
+            : ''
+        }${actualYear ? `&year=${actualYear}` : ''}${
           actualSearchType ? `&stype=${actualSearchType}` : ''
+        }${
+          actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''
         }${doubanQuery}&poster=${encodeURIComponent(
           actualPoster || ''
         )}${returnQuery}${kidsQuery}`
