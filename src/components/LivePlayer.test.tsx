@@ -143,7 +143,7 @@ it('switches on a fatal failure, stops every failed HLS loader, and exposes retr
 
 it('tries the backup after the startup deadline and destroys media and timers on unmount', () => {
   const { unmount } = render(<LivePlayer channel={channel} />);
-  act(() => jest.advanceTimersByTime(20000));
+  act(() => jest.advanceTimersByTime(8000));
   expect(mockPlayers).toHaveLength(2);
   expect(mockHls[0].stopLoad).toHaveBeenCalledTimes(1);
   const player = mockPlayers[1];
@@ -172,12 +172,16 @@ it('retains the user sound settings across a channel switch', () => {
   );
 });
 
-it('starts built-in domestic channels directly and does not infer relay from a failed request', () => {
+it('starts domestic channels directly and retries the same source through Cloudflare before the backup', () => {
   render(<LivePlayer channel={{ ...channel, id: 'cn:fixture' }} />);
   expect(mockProbe.mock.calls[0][0]).toEqual(channel.urls);
   fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
   expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
   act(() => mockHls[0].events.error('error', { fatal: true }));
+  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(
+    '/api/live/stream?channel=cn%3Afixture&line=0'
+  );
+  act(() => mockHls[mockHls.length - 1].events.error('error', { fatal: true }));
   expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[1]);
   expect(screen.getByRole('button', { name: '自动选择' })).toHaveAttribute(
     'aria-pressed',
@@ -208,24 +212,81 @@ it('automatically relays only the source explicitly listed as requiring compatib
   fireEvent.click(screen.getByRole('button', { name: '线路 2' }));
   expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[1]);
 });
-it('starts world channels directly but permits a manual compatibility selection', () => {
+it('routes overseas channels through Cloudflare automatically and respects manual direct mode', () => {
   render(<LivePlayer channel={{ ...channel, id: 'world:fixture' }} />);
-  fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
-  expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
-  fireEvent.click(screen.getByRole('button', { name: '兼容播放' }));
-  fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
-  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(
+  expect(mockPlayers[0].options.url).toBe(
     '/api/live/stream?channel=world%3Afixture&line=0'
   );
+  expect(screen.getByText(/当前线路：Cloudflare 转发/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '直连播放' }));
-  fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
   expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[0]);
+  act(() => mockHls[mockHls.length - 1].events.error('error', { fatal: true }));
+  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[1]);
+});
+it('relays HTTP domestic sources to avoid mixed content and labels the actual route', () => {
+  render(
+    <LivePlayer
+      channel={{
+        ...channel,
+        id: 'cn:http',
+        urls: ['http://example.com/live.m3u8'],
+      }}
+    />
+  );
+  expect(mockPlayers[0].options.url).toBe(
+    '/api/live/stream?channel=cn%3Ahttp&line=0'
+  );
+  expect(
+    screen.getByText(/Cloudflare 兼容转发（HTTP 源）/)
+  ).toBeInTheDocument();
+});
+it('starts playback without waiting for multi-source probes to finish', () => {
+  render(<LivePlayer channel={{ ...channel, id: 'cn:fixture' }} />);
+  expect(mockPlayers).toHaveLength(1);
+  expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
 });
 it('never relays user-imported channels even if imported data contains a relay marker', () => {
   render(<LivePlayer channel={{ ...channel, relayRequired: channel.urls }} />);
   expect(mockProbe.mock.calls[0][0]).toEqual(channel.urls);
   expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
   expect(
-    screen.queryByRole('button', { name: '兼容播放' })
+    screen.queryByRole('button', { name: 'Cloudflare 转发' })
   ).not.toBeInTheDocument();
+});
+
+it('uses an 8 second direct deadline then 12 seconds for Cloudflare before advancing', () => {
+  render(<LivePlayer channel={{ ...channel, id: 'cn:fixture' }} />);
+  act(() => jest.advanceTimersByTime(7999));
+  expect(mockPlayers).toHaveLength(1);
+  act(() => jest.advanceTimersByTime(1));
+  expect(mockPlayers).toHaveLength(2);
+  expect(mockPlayers[1].options.url).toBe(
+    '/api/live/stream?channel=cn%3Afixture&line=0'
+  );
+  expect(screen.getByText(/首帧等待超过 8 秒/)).toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(11999));
+  expect(mockPlayers).toHaveLength(2);
+  act(() => jest.advanceTimersByTime(1));
+  expect(mockPlayers).toHaveLength(3);
+  expect(mockPlayers[2].options.url).toBe(channel.urls[1]);
+  expect(screen.getByText(/首帧等待超过 12 秒/)).toBeInTheDocument();
+});
+it('keeps a 20 second recovery window after playback has started', () => {
+  render(<LivePlayer channel={channel} />);
+  act(() => mockPlayers[0].events['video:playing']());
+  act(() => jest.advanceTimersByTime(12000));
+  expect(mockPlayers).toHaveLength(1);
+  act(() => mockPlayers[0].events['video:waiting']());
+  act(() => jest.advanceTimersByTime(19999));
+  expect(mockPlayers).toHaveLength(1);
+  act(() => jest.advanceTimersByTime(1));
+  expect(mockPlayers).toHaveLength(2);
+  expect(screen.getByText(/缓冲等待超过 20 秒/)).toBeInTheDocument();
+});
+it('does not extend the first-frame deadline when initial buffering repeats', () => {
+  render(<LivePlayer channel={channel} />);
+  act(() => jest.advanceTimersByTime(7000));
+  act(() => mockPlayers[0].events['video:waiting']());
+  act(() => jest.advanceTimersByTime(1000));
+  expect(mockPlayers).toHaveLength(2);
 });

@@ -1,3 +1,4 @@
+/** @jest-environment node */
 import {
   publicWorldChannel,
   verifiedSatelliteChannels,
@@ -29,7 +30,7 @@ const source: WorldLiveSource = {
   language: '英语',
   website: 'https://dw.com',
 };
-it('only accepts current decoded HTTPS HLS satellite HD sources, merging duplicate station alternatives', () => {
+it('accepts current decoded domestic HLS, routes HTTP via relay, and excludes shopping/overseas/bad media', () => {
   const report = {
     checked_at: checked,
     channels: [
@@ -37,25 +38,36 @@ it('only accepts current decoded HTTPS HLS satellite HD sources, merging duplica
       { ...hd, url: 'https://official.example.com/backup.m3u8' },
       { ...hd, name: '地方新闻', group: '地方台' },
       { ...hd, name: '人间卫视', group: '港台' },
-      { ...hd, name: '标清卫视', resolution: '720x576' },
+      { ...hd, name: '购物台', group: '购物' },
+      { ...hd, name: '快乐购', group: '地方台' },
       { ...hd, url: 'http://official.example.com/a.m3u8' },
       { ...hd, url: 'https://official.example.com/rtp/123' },
       { ...hd, frames: 0 },
       { ...hd, errors: ['decode error'] },
     ],
   };
-  expect(verifiedSatelliteChannels(status, report, now)).toEqual([
-    expect.objectContaining({
-      id: 'cn:湖南卫视',
-      quality: '1080p',
-      category: '高清卫视',
-      urls: [hd.url, 'https://official.example.com/backup.m3u8'],
-      verification: {
-        checkedAt: '2026-11-10T04:32:44.000Z',
-        method: 'upstream-decode',
-      },
-    }),
-  ]);
+  expect(verifiedSatelliteChannels(status, report, now)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: 'cn:湖南卫视',
+        quality: '1080p',
+        category: '卫视',
+        region: 'domestic',
+        relayRequired: ['http://official.example.com/a.m3u8'],
+        urls: [
+          hd.url,
+          'https://official.example.com/backup.m3u8',
+          'http://official.example.com/a.m3u8',
+        ],
+        verification: {
+          checkedAt: '2026-11-10T04:32:44.000Z',
+          method: 'upstream-decode',
+        },
+      }),
+      expect.objectContaining({ name: '地方新闻', category: '地方频道' }),
+    ])
+  );
+  expect(verifiedSatelliteChannels(status, report, now)).toHaveLength(2);
 });
 it('rejects stale, failed or mismatched report generations instead of claiming playable', () => {
   expect(
@@ -107,4 +119,20 @@ it('preserves language suffixes and rejects explicitly low-definition variants',
   expect(worldChannelCandidates(configured, list)).toEqual([
     'https://official.example.com/english.m3u8',
   ]);
+});
+
+it('rejects private HTTP targets even when an upstream report marks them successful', () => {
+  expect(
+    verifiedSatelliteChannels(
+      status,
+      {
+        checked_at: checked,
+        channels: [
+          { ...hd, url: 'http://127.0.0.1/live.m3u8' },
+          { ...hd, url: 'http://192.168.1.1/a.m3u8' },
+        ],
+      },
+      now
+    )
+  ).toEqual([]);
 });

@@ -4,7 +4,7 @@ import Artplayer from 'artplayer';
 import Hls, { FetchLoader } from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 
-import type { LiveChannel } from '@/lib/live';
+import { LiveChannel, liveChannelRegion } from '@/lib/live';
 import { probeLiveSources } from '@/lib/live-probe';
 import { DownloadMeter } from '@/lib/playback-stats';
 import type { VideoProbeResult } from '@/lib/video-probe';
@@ -21,8 +21,7 @@ function sourcePlaybackUrl(
   mode: PlaybackMode,
   relayRequired: string[]
 ): string {
-  // A failed browser request is not evidence of a mainland block. Automatic
-  // relay is opt-in per source URL and never applies to user-imported sources.
+  // Relay only catalogued channels: the server resolves the channel/line itself.
   const relay =
     isBuiltinChannel(id) &&
     (mode === 'relay' || (mode === 'auto' && relayRequired.includes(url)));
@@ -46,10 +45,31 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
     container: HTMLElement;
     video: HTMLVideoElement;
   } | null>(null);
+  const [mode, setMode] = useState<PlaybackMode>('auto');
   const playlist = JSON.stringify(channel.urls);
   const builtIn = isBuiltinChannel(channel.id);
-  const relayPolicy = JSON.stringify(channel.relayRequired || []);
-  const [mode, setMode] = useState<PlaybackMode>('auto');
+  const relayPolicy = JSON.stringify(
+    Array.from(
+      new Set([
+        ...(channel.relayRequired || []),
+        ...channel.urls.filter(
+          (url) =>
+            liveChannelRegion(channel) === 'overseas' || url.startsWith('http:')
+        ),
+      ])
+    )
+  );
+  const [relayFallbacks, setRelayFallbacks] = useState<string[]>([]);
+  const fallbackPolicy = JSON.stringify(relayFallbacks);
+  const currentUrl = channel.urls[line] || '';
+  const currentPlaybackUrl = sourcePlaybackUrl(
+    channel.id,
+    currentUrl,
+    line,
+    mode,
+    [...JSON.parse(relayPolicy), ...relayFallbacks]
+  );
+  const usingRelay = currentPlaybackUrl.startsWith('/api/live/stream?');
   const [errors, setErrors] = useState<string[]>([]);
   const [measurements, setMeasurements] = useState<
     Map<number, VideoProbeResult>
@@ -92,14 +112,22 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
     };
   }, [playlist, mode, builtIn, channel.id, probeVersion, relayPolicy]);
   useEffect(() => {
-    if (!container.current || preparing) return;
+    if (!container.current) return;
     const urls: string[] = JSON.parse(playlist);
     if (line >= urls.length) {
       setLine(0);
       return;
     }
+    if (!urls.length) return;
+    const playbackUrl = sourcePlaybackUrl(channel.id, urls[line], line, mode, [
+      ...JSON.parse(relayPolicy),
+      ...JSON.parse(fallbackPolicy),
+    ]);
+    const relayed = playbackUrl.startsWith('/api/live/stream?');
     let disposed = false;
     let firstFrame = false;
+    const startupTimeout = relayed ? 12000 : 8000;
+    const startupDeadline = Date.now() + startupTimeout;
     let hls: Hls | null = null;
     let timer: ReturnType<typeof setTimeout>;
     let switched = false;
@@ -109,16 +137,26 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
     setStatus(`正在连接线路 ${line + 1}…`);
     setFailed(false);
     setSeconds(null);
-    const fail = (reason = '连接等待超过 20 秒') => {
+    const fail = (
+      reason = firstFrame
+        ? '缓冲等待超过 20 秒'
+        : `首帧等待超过 ${startupTimeout / 1000} 秒`
+    ) => {
       if (disposed || switched) return;
       switched = true;
+      manualChoice.current = true;
       setErrors((previous) => [
         ...previous.slice(-4),
-        `线路 ${line + 1}：${reason}`,
+        `线路 ${line + 1}（${relayed ? 'Cloudflare' : '直连'}）：${reason}`,
       ]);
       clearTimeout(timer);
       hls?.stopLoad();
-      if (line + 1 < urls.length) {
+      if (builtIn && mode === 'auto' && !relayed) {
+        setStatus('直连未成功，正在尝试 Cloudflare 兼容转发…');
+        setRelayFallbacks((previous) =>
+          Array.from(new Set([...previous, urls[line]]))
+        );
+      } else if (line + 1 < urls.length) {
         setStatus('正在尝试备用线路…');
         setLine(line + 1);
       } else {
@@ -128,13 +166,7 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
     };
     const player = new Artplayer({
       container: container.current,
-      url: sourcePlaybackUrl(
-        channel.id,
-        urls[line],
-        line,
-        mode,
-        JSON.parse(relayPolicy)
-      ),
+      url: playbackUrl,
       type: 'm3u8',
       isLive: true,
       autoplay: true,
@@ -195,24 +227,30 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
         container: player.template.$player,
         video: player.video,
       });
-    timer = setTimeout(() => fail(), 20000);
+    timer = setTimeout(() => fail(), startupTimeout);
     player.on('video:playing', () => {
       if (disposed) return;
       clearTimeout(timer);
       if (!firstFrame) setSeconds((performance.now() - started) / 1000);
       firstFrame = true;
+      manualChoice.current = true;
       setStatus('正在直播');
     });
     player.on('video:error', () => fail('浏览器无法加载或解码视频'));
     player.on('video:canplay', () => {
-      clearTimeout(timer);
-      if (player.video.paused) setStatus('已就绪，点击播放器开始播放');
+      if (player.video.paused) {
+        clearTimeout(timer);
+        setStatus('已就绪，点击播放器开始播放');
+      }
     });
     player.on('video:waiting', () => {
       if (disposed) return;
       setStatus('正在缓冲…');
       clearTimeout(timer);
-      timer = setTimeout(() => fail(), 20000);
+      timer = setTimeout(
+        () => fail(),
+        firstFrame ? 20000 : Math.max(0, startupDeadline - Date.now())
+      );
     });
     player.on('video:pause', () => {
       if (firstFrame) clearTimeout(timer);
@@ -233,9 +271,9 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
     retry,
     mode,
     relayPolicy,
+    fallbackPolicy,
     builtIn,
     channel.id,
-    preparing,
     meter,
   ]);
   return (
@@ -244,9 +282,9 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
         <div>
           <h2 className='text-lg font-semibold'>{channel.name}</h2>
           <p role='status' className='mt-1 text-xs text-gray-500'>
-            {preparing
-              ? `正在检测线路 ${measurements.size}/${channel.urls.length}…`
-              : status}
+            {status}
+            {preparing &&
+              ` · 后台检测 ${measurements.size}/${channel.urls.length}`}
             {seconds !== null && ` · 启动 ${seconds.toFixed(1)} 秒`}
           </p>
         </div>
@@ -277,13 +315,14 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
               [
                 { value: 'auto', label: '自动选择' },
                 { value: 'direct', label: '直连播放' },
-                { value: 'relay', label: '兼容播放' },
+                { value: 'relay', label: 'Cloudflare 转发' },
               ] as const
             ).map(({ value, label }) => (
               <button
                 key={String(value)}
                 aria-pressed={mode === value}
                 onClick={() => {
+                  setRelayFallbacks([]);
                   setMode(value);
                   setRetry((v) => v + 1);
                 }}
@@ -356,6 +395,7 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
           <button
             className='rounded-lg bg-blue-600 px-4 py-2 text-sm text-white'
             onClick={() => {
+              setRelayFallbacks([]);
               setLine(0);
               setRetry((v) => v + 1);
             }}
@@ -374,7 +414,14 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
           </details>
         )}
         <p className='w-full text-xs text-gray-500'>
-          默认直连，仅已标记需要兼容的线路自动转发。首次静音播放，切台保留音量。测速为短时媒体采样，可手动选源或跳过预检。
+          当前线路：
+          {usingRelay
+            ? currentUrl.startsWith('http:')
+              ? 'Cloudflare 兼容转发（HTTP 源）'
+              : 'Cloudflare 转发'
+            : '浏览器直连'}
+          。国内优先直连，海外经
+          Cloudflare；自动模式下直连失败会先尝试同源兼容转发。首次静音，切台保留音量。
         </p>
       </div>
     </section>

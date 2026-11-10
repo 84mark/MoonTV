@@ -40,12 +40,10 @@ const channels = [
 ];
 beforeEach(() => {
   localStorage.clear();
-  global.fetch = jest
-    .fn()
-    .mockResolvedValue({
-      ok: true,
-      json: async () => ({ channels, fallback: false, updatedAt: 0 }),
-    });
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ channels, fallback: false, updatedAt: 0 }),
+  });
 });
 async function openPage() {
   await act(async () => {
@@ -54,23 +52,25 @@ async function openPage() {
 }
 it('puts an explicit source count directly alongside each channel name', async () => {
   await openPage();
+  fireEvent.click(screen.getByRole('button', { name: '海外频道' }));
   const dw = screen.getByRole('button', { name: '播放 DW English' });
   expect(within(dw).getByText('3 个源')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '国内频道' }));
   expect(
     within(screen.getByRole('button', { name: '播放 浙江卫视' })).getByText(
       '1 个源'
     )
   ).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '国际频道' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '海外频道' })).toBeInTheDocument();
 });
-it('separates international and HD satellite categories and searches language metadata', async () => {
+it('separates domestic and overseas categories and searches language metadata', async () => {
   await openPage();
-  fireEvent.click(screen.getByRole('button', { name: '高清卫视' }));
+  fireEvent.click(screen.getByRole('button', { name: '国内频道' }));
   expect(screen.queryByRole('button', { name: '播放 DW English' })).toBeNull();
   expect(
     screen.getByRole('button', { name: '播放 浙江卫视' })
   ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /^全部$/ }));
+  fireEvent.click(screen.getByRole('button', { name: '海外频道' }));
   fireEvent.change(screen.getByRole('textbox', { name: '搜索频道' }), {
     target: { value: '英语' },
   });
@@ -81,20 +81,24 @@ it('separates international and HD satellite categories and searches language me
 });
 it('does not present untested candidates as verified playback and labels upstream checks accurately', async () => {
   await openPage();
+  fireEvent.click(screen.getByRole('button', { name: '海外频道' }));
   fireEvent.click(screen.getByRole('button', { name: '播放 DW English' }));
   expect(
     screen.getByText('频道候选 · 播放状态以实际连接为准')
   ).toBeInTheDocument();
   expect(screen.queryByText('本站检测通过')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '国内频道' }));
   fireEvent.click(screen.getByRole('button', { name: '播放 浙江卫视' }));
   expect(screen.getByText('上游检测通过')).toBeInTheDocument();
   expect(screen.queryByText('本站检测通过')).toBeNull();
 });
 it('preserves favorites, recents, and M3U import', async () => {
   await openPage();
+  fireEvent.click(screen.getByRole('button', { name: '海外频道' }));
   fireEvent.click(screen.getByRole('button', { name: '收藏 DW English' }));
   fireEvent.click(screen.getByRole('button', { name: /^收藏$/ }));
   expect(screen.queryByRole('button', { name: '播放 浙江卫视' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '海外频道' }));
   fireEvent.click(screen.getByRole('button', { name: '播放 DW English' }));
   fireEvent.click(screen.getByRole('button', { name: '最近观看' }));
   expect(
@@ -113,4 +117,31 @@ it('preserves favorites, recents, and M3U import', async () => {
   expect(localStorage.getItem('moontv_live_preferences_v1')).toContain(
     '自定义新闻'
   );
+});
+
+it('never shows shopping channels in either region or imported lists', async () => {
+  (fetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      channels: [
+        ...channels,
+        {
+          id: 'cn:shopping',
+          name: '快乐购物',
+          category: '购物',
+          urls: ['https://example.com/shop.m3u8'],
+        },
+        {
+          id: 'world:qvc',
+          name: 'QVC',
+          category: 'Shopping',
+          urls: ['https://example.com/qvc.m3u8'],
+        },
+      ],
+    }),
+  });
+  await openPage();
+  expect(screen.queryByRole('button', { name: '播放 快乐购物' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '海外频道' }));
+  expect(screen.queryByRole('button', { name: '播放 QVC' })).toBeNull();
 });

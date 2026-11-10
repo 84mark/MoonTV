@@ -214,5 +214,273 @@
       "method": "官方页面与目录核对，未实测",
       "checkedAt": ""
     }
+  },
+  {
+    "id": "cn:宜昌综合",
+    "name": "宜昌综合",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://liveplay.ycrmt.cn/",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://liveplay.ycrmt.cn/sxgd/zhpd.m3u8"],
+    "trustedHosts": ["liveplay.ycrmt.cn"],
+    "quality": "1920x1080",
+    "description": "公开直播线路，上游已完成短时解码检查；实际可用性以当前网络播放为准。",
+    "verification": {
+      "method": "upstream-decode",
+      "checkedAt": "2026-11-10T04:13:51+00:00"
+    }
+  },
+  {
+    "id": "cn:临沂公共",
+    "name": "临沂公共",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://m3u8-channel.lytv.tv/",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": [
+      "https://m3u8-channel.lytv.tv/nmip-media/channellive/channel113571/playlist.m3u8"
+    ],
+    "trustedHosts": ["m3u8-channel.lytv.tv"],
+    "quality": "1280x720",
+    "description": "公开直播线路，上游已完成短时解码检查；实际可用性以当前网络播放为准。",
+    "verification": {
+      "method": "upstream-decode",
+      "checkedAt": "2026-11-10T04:30:57+00:00"
+    }
+  },
+  {
+    "id": "cn:Guangzhou TV",
+    "name": "Guangzhou TV",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://tencentplaybusiness.gztv.com/",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://tencentplaybusiness.gztv.com/live/zonghes.m3u8"],
+    "trustedHosts": ["tencentplaybusiness.gztv.com"],
+    "quality": "1280x720",
+    "description": "公开直播线路，上游已完成短时解码检查；实际可用性以当前网络播放为准。",
+    "verification": {
+      "method": "upstream-decode",
+      "checkedAt": "2026-11-10T04:14:44+00:00"
+    }
+  },
+  {
+    "id": "cn:东莞新闻综合",
+    "name": "东莞新闻综合",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://stream.sun0769.com/",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://stream.sun0769.com/dgrtv1/mp4tv1_800/index.m3u8"],
+    "trustedHosts": ["stream.sun0769.com"],
+    "quality": "1280x720",
+    "description": "公开直播线路，上游已完成短时解码检查；实际可用性以当前网络播放为准。",
+    "verification": {
+      "method": "upstream-decode",
+      "checkedAt": "2026-11-10T04:14:12+00:00"
+    }
+  },
+  {
+    "id": "cn:南宁新闻",
+    "name": "南宁新闻",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://hls.nntv.cn/",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://hls.nntv.cn/nnlive/XWZH_24.m3u8"],
+    "trustedHosts": ["hls.nntv.cn"],
+    "quality": "1280x720",
+    "description": "公开直播线路，上游已完成短时解码检查；实际可用性以当前网络播放为准。",
+    "verification": {
+      "method": "upstream-decode",
+      "checkedAt": "2026-11-10T04:14:50+00:00"
+    }
+  },
+  {
+    "id": "cn:延安综合",
+    "name": "延安综合",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://srs.yanews.cn/",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://srs.yanews.cn/video/YATV-1/index.m3u8"],
+    "trustedHosts": ["srs.yanews.cn"],
+    "quality": "1280x720",
+    "description": "公开直播线路，上游已完成短时解码检查；实际可用性以当前网络播放为准。",
+    "verification": {
+      "method": "upstream-decode",
+      "checkedAt": "2026-11-10T04:29:49+00:00"
+    }
+  },
+  {
+    "id": "cn:CGTN",
+    "name": "CGTN",
+    "category": "央视",
+    "language": "英语",
+    "website": "https://english-livebkali.cgtn.com/",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://english-livebkali.cgtn.com/live/encgtn_0.m3u8"],
+    "trustedHosts": ["english-livebkali.cgtn.com"],
+    "quality": "1920x1080",
+    "description": "公开直播线路，上游已完成短时解码检查；实际可用性以当前网络播放为准。",
+    "verification": {
+      "method": "upstream-decode",
+      "checkedAt": "2026-11-10T04:15:30+00:00"
+    }
+  },
+  {
+    "id": "cn:CGTN英语",
+    "name": "CGTN英语",
+    "category": "央视",
+    "language": "英语",
+    "website": "https://english-livebkali.cgtn.com/",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://english-livebkali.cgtn.com/live/encgtn_1.m3u8"],
+    "trustedHosts": ["english-livebkali.cgtn.com"],
+    "quality": "1280x720",
+    "description": "公开直播线路，上游已完成短时解码检查；实际可用性以当前网络播放为准。",
+    "verification": {
+      "method": "upstream-decode",
+      "checkedAt": "2026-11-10T04:15:15+00:00"
+    }
+  },
+  {
+    "id": "cn:浙江新闻",
+    "name": "浙江新闻",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://www.cztv.com/",
+    "sourceUrl": "https://github.com/fanmingming/live/blob/09c002984ceb651b09ac991d951fe6e05e70c513/tv/m3u/ipv6.m3u",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://ali-m-l.cztv.com/channels/lantian/channel007/1080p.m3u8"],
+    "trustedHosts": ["ali-m-l.cztv.com"],
+    "quality": "标称1080p",
+    "description": "来自公开项目的频道候选，未做本站媒体实测；播放情况以当前连接为准。",
+    "verification": {
+      "method": "目录核对，未实测",
+      "checkedAt": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "id": "cn:浙江少儿",
+    "name": "浙江少儿",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://www.cztv.com/",
+    "sourceUrl": "https://github.com/fanmingming/live/blob/09c002984ceb651b09ac991d951fe6e05e70c513/tv/m3u/ipv6.m3u",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://ali-m-l.cztv.com/channels/lantian/channel008/1080p.m3u8"],
+    "trustedHosts": ["ali-m-l.cztv.com"],
+    "quality": "标称1080p",
+    "description": "来自公开项目的频道候选，未做本站媒体实测；播放情况以当前连接为准。",
+    "verification": {
+      "method": "目录核对，未实测",
+      "checkedAt": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "id": "cn:之江纪录",
+    "name": "之江纪录",
+    "category": "地方频道",
+    "language": "普通话",
+    "website": "https://www.cztv.com/",
+    "sourceUrl": "https://github.com/fanmingming/live/blob/09c002984ceb651b09ac991d951fe6e05e70c513/tv/m3u/ipv6.m3u",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://ali-m-l.cztv.com/channels/lantian/channel012/1080p.m3u8"],
+    "trustedHosts": ["ali-m-l.cztv.com"],
+    "quality": "标称1080p",
+    "description": "来自公开项目的频道候选，未做本站媒体实测；播放情况以当前连接为准。",
+    "verification": {
+      "method": "目录核对，未实测",
+      "checkedAt": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "id": "cn:宁夏卫视",
+    "name": "宁夏卫视",
+    "category": "卫视",
+    "language": "普通话",
+    "website": "",
+    "sourceUrl": "https://github.com/fanmingming/live/blob/09c002984ceb651b09ac991d951fe6e05e70c513/tv/m3u/index.m3u",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://hls.ningxiahuangheyun.com/live/nxws1M.m3u8"],
+    "trustedHosts": ["hls.ningxiahuangheyun.com"],
+    "quality": "待测",
+    "description": "来自公开项目的频道候选，未做本站媒体实测；播放情况以当前连接为准。",
+    "verification": {
+      "method": "目录核对，未实测",
+      "checkedAt": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "id": "cn:兵团卫视",
+    "name": "兵团卫视",
+    "category": "卫视",
+    "language": "普通话",
+    "website": "",
+    "sourceUrl": "https://github.com/fanmingming/live/blob/09c002984ceb651b09ac991d951fe6e05e70c513/tv/m3u/index.m3u",
+    "feed": "cn",
+    "tvgIds": [],
+    "urls": ["https://liveout.btzx.com.cn/62ds9e/yil08g.m3u8"],
+    "trustedHosts": ["liveout.btzx.com.cn"],
+    "quality": "待测",
+    "description": "来自公开项目的频道候选，未做本站媒体实测；播放情况以当前连接为准。",
+    "verification": {
+      "method": "目录核对，未实测",
+      "checkedAt": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "id": "world:abc-news",
+    "name": "ABC News",
+    "category": "国际新闻与纪录",
+    "language": "英语",
+    "website": "https://abcnews.go.com/Live",
+    "sourceUrl": "https://github.com/Free-TV/IPTV/blob/8f88437405dd07827ddb6048270fe80d7795f9db/lists/usa.md",
+    "feed": "us",
+    "tvgIds": ["ABCNews.us"],
+    "urls": [
+      "https://abcnews-streams.akamaized.net/hls/live/2023560/abcnewshudson1/master.m3u8"
+    ],
+    "trustedHosts": ["abcnews-streams.akamaized.net"],
+    "quality": "待测",
+    "description": "来自公开项目的频道候选，未做本站媒体实测；播放情况以当前连接为准。",
+    "verification": {
+      "method": "目录核对，未实测",
+      "checkedAt": "2026-11-10T00:00:00Z"
+    }
+  },
+  {
+    "id": "world:cbs-news",
+    "name": "CBS News",
+    "category": "国际新闻与纪录",
+    "language": "英语",
+    "website": "https://www.cbsnews.com/live/",
+    "sourceUrl": "https://github.com/Free-TV/IPTV/blob/8f88437405dd07827ddb6048270fe80d7795f9db/lists/usa.md",
+    "feed": "us",
+    "tvgIds": ["CBSNews.us"],
+    "urls": [
+      "https://cbsnews.akamaized.net/hls/live/2020607/cbsnlineup_8/master.m3u8"
+    ],
+    "trustedHosts": ["cbsnews.akamaized.net"],
+    "quality": "待测",
+    "description": "来自公开项目的频道候选，未做本站媒体实测；播放情况以当前连接为准。",
+    "verification": {
+      "method": "目录核对，未实测",
+      "checkedAt": "2026-11-10T00:00:00Z"
+    }
   }
 ]

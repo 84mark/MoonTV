@@ -25,8 +25,10 @@ import {
 } from 'react';
 
 import {
+  isShoppingChannel,
   LIVE_STORAGE_KEY,
   LiveChannel,
+  liveChannelRegion,
   LivePreferences,
   mergeLiveChannels,
   parseLiveM3u,
@@ -47,7 +49,7 @@ function LivePageClient() {
   const [preferences, setPreferences] = useState(initialPreferences);
   const [ready, setReady] = useState(false);
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('全部');
+  const [category, setCategory] = useState('国内频道');
   const [library, setLibrary] = useState('全部频道');
   const [updatedAt, setUpdatedAt] = useState(0);
   const stage = useRef<HTMLDivElement>(null);
@@ -106,27 +108,19 @@ function LivePageClient() {
   }, [preferences, ready]);
   const channels = useMemo(
     () =>
-      mergeLiveChannels([...builtin, ...parseLiveM3u(preferences.customM3u)]),
+      mergeLiveChannels([
+        ...builtin,
+        ...parseLiveM3u(preferences.customM3u),
+      ]).filter((channel) => !isShoppingChannel(channel)),
     [builtin, preferences.customM3u]
   );
   const selected = channels.find((c) => c.id === selectedId);
-  const categories = [
-    '全部',
-    '国际频道',
-    '高清卫视',
-    ...(channels.some((channel) => channel.category === '自定义')
-      ? ['自定义']
-      : []),
-  ];
+  const categories = ['国内频道', '海外频道'];
   const filtered = channels
     .filter((channel) => {
       const inCategory =
-        category === '全部' ||
-        (category === '国际频道'
-          ? channel.id.startsWith('world:')
-          : category === '高清卫视'
-          ? /卫视/.test(channel.category)
-          : channel.category === category);
+        liveChannelRegion(channel) ===
+        (category === '海外频道' ? 'overseas' : 'domestic');
       const inLibrary =
         library === '全部频道' ||
         (library === '收藏'
@@ -217,7 +211,8 @@ function LivePageClient() {
               </button>
             </div>
             <p className='text-xs leading-6 text-slate-500'>
-              粘贴完整 M3U 内容。仅导入 HTTPS 线路，保存在当前浏览器。
+              粘贴完整 M3U 内容。支持 HTTP / HTTPS HLS
+              线路，保存在当前浏览器。购物频道不会导入。
             </p>
             <textarea
               aria-label='M3U 内容'
@@ -236,11 +231,15 @@ function LivePageClient() {
                 onClick={() => {
                   const parsed = parseLiveM3u(draft);
                   if (!parsed.length) {
-                    setNotice('未找到有效的 HTTPS 频道，请检查 M3U 内容。');
+                    setNotice('未找到有效的非购物频道，请检查 M3U 内容。');
                     return;
                   }
                   setPreferences((value) => ({ ...value, customM3u: draft }));
-                  setCategory('自定义');
+                  setCategory(
+                    liveChannelRegion(parsed[0]) === 'overseas'
+                      ? '海外频道'
+                      : '国内频道'
+                  );
                   setLibrary('全部频道');
                   setShowImport(false);
                   setNotice(`已导入 ${parsed.length} 个频道。`);
@@ -254,7 +253,7 @@ function LivePageClient() {
                   setPreferences((value) => ({ ...value, customM3u: '' }));
                   setDraft('');
                   setSelectedId('');
-                  setCategory('全部');
+                  setCategory('国内频道');
                   setLibrary('全部频道');
                   setShowImport(false);
                 }}
@@ -295,7 +294,11 @@ function LivePageClient() {
                   </div>
                   <div className='flex flex-wrap justify-center gap-2'>
                     {channels
-                      .filter((channel) => channel.id.startsWith('world:'))
+                      .filter(
+                        (channel) =>
+                          liveChannelRegion(channel) ===
+                          (category === '海外频道' ? 'overseas' : 'domestic')
+                      )
                       .slice(0, 2)
                       .map((channel) => (
                         <button
@@ -367,11 +370,11 @@ function LivePageClient() {
               <div className='flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-xs text-slate-400'>
                 <span className='inline-flex items-center gap-1.5'>
                   <Globe2 className='h-3.5 w-3.5' />
-                  国际官方频道候选
+                  国内频道优先直连
                 </span>
                 <span className='inline-flex items-center gap-1.5'>
                   <Tv className='h-3.5 w-3.5' />
-                  高清卫视候选
+                  海外频道 Cloudflare 转发
                 </span>
                 <span>{channels.length} 个频道可选</span>
               </div>
@@ -381,7 +384,8 @@ function LivePageClient() {
                 频道说明与官方入口
               </summary>
               <p className='mt-3 leading-6'>
-                频道来自官方页面候选及公开目录。标称画质以实际播放为准；候选不代表已经逐台实测，播放还可能受地区及源站状态影响。
+                国内频道优先由浏览器直连；海外频道经 Cloudflare 转发。HTTP
+                线路和直连失败的内置线路使用兼容转发，实际线路会显示在播放器中。已排除购物频道，播放仍可能受源站状态影响。
               </p>
               <div className='mt-3 flex flex-wrap gap-2'>
                 <a
@@ -520,7 +524,7 @@ function LivePageClient() {
                           className={`flex h-7 min-w-[28px] items-center justify-center rounded-lg px-1.5 text-[10px] font-black tracking-tight ${
                             active
                               ? 'bg-sky-500 text-white'
-                              : channel.id.startsWith('world:')
+                              : liveChannelRegion(channel) === 'overseas'
                               ? 'bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900'
                               : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300'
                           }`}

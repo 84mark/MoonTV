@@ -1,4 +1,6 @@
 import {
+  isShoppingChannel,
+  liveChannelRegion,
   liveUrl,
   mergeLiveChannels,
   parseLiveM3u,
@@ -27,6 +29,7 @@ javascript:alert(1)
       id: 'cn:CCTV1.cn',
       name: 'CCTV-1',
       category: '央视',
+      region: 'domestic',
       urls: ['https://example.com/one.m3u8', 'https://example.com/two.m3u8'],
     },
   ]);
@@ -46,13 +49,11 @@ it('retains commas inside quoted attributes and keeps same-named regional channe
 it('ships real HTTPS channel lists with alternate lines', () => {
   const channels = seededLiveChannels();
   expect(channels.length).toBeGreaterThanOrEqual(8);
-  expect(
-    channels.every((c) => !['地方频道', '港澳台'].includes(c.category))
-  ).toBe(true);
+  expect(channels.some((c) => c.category === '地方频道')).toBe(true);
   expect(
     channels
-      .filter((c) => c.id.startsWith('cn:'))
-      .every((c) => c.category === '高清卫视')
+      .filter((c) => c.id.startsWith('world:'))
+      .every((c) => c.relayRequired?.length === c.urls.length)
   ).toBe(true);
   expect(channels.some((c) => c.urls.length > 1)).toBe(true);
   expect(
@@ -81,4 +82,50 @@ it('handles corrupt or unexpected local preferences without changing film histor
     customM3u: '',
   });
   expect(localStorage.getItem('moontv_play_records')).toBe('{"keep":true}');
+});
+
+it('preserves routing metadata and excludes shopping channels from merged/custom lists', () => {
+  expect(
+    liveChannelRegion({
+      id: 'world:one',
+      name: 'One',
+      category: 'News',
+      urls: [],
+    })
+  ).toBe('overseas');
+  const channels = mergeLiveChannels([
+    {
+      id: 'cn:one',
+      name: '新闻',
+      category: '地方频道',
+      urls: ['http://a.com/a.m3u8'],
+      relayRequired: ['http://a.com/a.m3u8'],
+    },
+    {
+      id: 'cn:one',
+      name: '新闻',
+      category: '地方频道',
+      urls: ['https://a.com/a.m3u8'],
+    },
+    {
+      id: 'cn:shop',
+      name: '好易购',
+      category: '地方频道',
+      urls: ['https://a.com/shop.m3u8'],
+    },
+  ]);
+  expect(channels).toHaveLength(1);
+  expect(channels[0].relayRequired).toEqual(['http://a.com/a.m3u8']);
+  expect(isShoppingChannel({ name: 'QVC UK', category: 'News' })).toBe(true);
+  expect(
+    parseLiveM3u('#EXTM3U\n#EXTINF:-1,河北三佳购物\nhttps://a.com/shop.m3u8')
+  ).toEqual([]);
+});
+
+it('filters shopping imports by original group and TV guide identity as well as name', () => {
+  expect(
+    parseLiveM3u(
+      '#EXTM3U\n#EXTINF:-1 group-title="購物",普通名字\nhttps://a.com/a.m3u8\n#EXTINF:-1 tvg-id="QVC.uk",Another\nhttps://a.com/b.m3u8'
+    )
+  ).toEqual([]);
 });

@@ -1,4 +1,8 @@
-import { mergeLiveChannels, seededLiveChannels } from './live';
+import {
+  liveChannelRegion,
+  mergeLiveChannels,
+  seededLiveChannels,
+} from './live';
 import {
   DAILY_CHANNELS_URL,
   DAILY_STATUS_URL,
@@ -46,6 +50,10 @@ export async function getLiveCatalog() {
             sources.map((s) => s.feed).filter((feed) => /^[a-z]{2}$/.test(feed))
           )
         );
+        const reportPromise = Promise.all([
+          fetchUpstream(DAILY_STATUS_URL, 'json'),
+          fetchUpstream(DAILY_CHANNELS_URL, 'json'),
+        ]).catch(() => null);
         const playlistResults = await Promise.all(
           feeds.map(async (feed) => {
             try {
@@ -67,15 +75,14 @@ export async function getLiveCatalog() {
         let reportCurrent = false;
         let satellites: ReturnType<typeof verifiedSatelliteChannels> = [];
         try {
-          const [status, report] = await Promise.all([
-            fetchUpstream(DAILY_STATUS_URL, 'json'),
-            fetchUpstream(DAILY_CHANNELS_URL, 'json'),
-          ]);
+          const result = await reportPromise;
+          if (!result) throw new Error('Report unavailable');
+          const [status, report] = result;
           reportCurrent = satelliteReportCurrent(status, report);
           if (reportCurrent)
             satellites = verifiedSatelliteChannels(status, report);
         } catch {
-          /* A report outage never turns old or SD entries into verified HD channels. */
+          /* A report outage never turns stale entries into newly verified channels. */
         }
         const seeds = seededLiveChannels();
         const curated = seeds.map((channel) => {
@@ -89,14 +96,19 @@ export async function getLiveCatalog() {
               ? worldChannelCandidates(config, result.text)
               : [];
           // Preserve reviewed seeds and previously discovered official alternatives on transient failure.
+          const urls = Array.from(
+            new Set([
+              ...channel.urls,
+              ...(result?.fresh ? found : previous?.urls || []),
+            ])
+          );
           return {
             ...channel,
-            urls: Array.from(
-              new Set([
-                ...channel.urls,
-                ...(result?.fresh ? found : previous?.urls || []),
-              ])
-            ),
+            urls,
+            relayRequired:
+              liveChannelRegion(channel) === 'overseas'
+                ? urls
+                : urls.filter((url) => url.startsWith('http:')),
           };
         });
         const verified = reportCurrent
@@ -121,6 +133,9 @@ export async function getLiveCatalog() {
             });
         const fresh =
           reportCurrent && playlistResults.every((result) => result.fresh);
+        const recentlyVerified = new Set(
+          verified.flatMap((channel) => channel.urls)
+        );
         saved = {
           channels: mergeLiveChannels([
             ...curated,
@@ -137,7 +152,15 @@ export async function getLiveCatalog() {
                   }
                 : channel;
             }),
-          ]),
+          ]).map((channel) => ({
+            ...channel,
+            urls: [...channel.urls].sort((a, b) => {
+              const rank = (url: string) =>
+                (url.startsWith('https:') ? 0 : 2) +
+                (recentlyVerified.has(url) ? 0 : 1);
+              return rank(a) - rank(b);
+            }),
+          })),
           updatedAt: fresh ? Date.now() : saved.updatedAt,
           fallback: !fresh,
         };

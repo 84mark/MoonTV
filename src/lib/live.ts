@@ -6,8 +6,10 @@ export interface LiveChannel {
   category: string;
   urls: string[];
   relayRequired?: string[];
+  region?: 'domestic' | 'overseas';
   language?: string;
   website?: string;
+  sourceUrl?: string;
   description?: string;
   quality?: string;
   verification?: { method: string; checkedAt: string };
@@ -33,13 +35,40 @@ export function liveUrl(value: string): string | null {
     return null;
   }
 }
+export function liveChannelRegion(
+  channel: LiveChannel
+): 'domestic' | 'overseas' {
+  return (
+    channel.region ||
+    (/^(world|hk|mo|tw):/.test(channel.id) ? 'overseas' : 'domestic')
+  );
+}
+export function isShoppingChannel(
+  channel: Pick<LiveChannel, 'name' | 'category'>
+): boolean {
+  return /购物|購物|好易购|好易購|优购|優購|快乐购|快樂購|购时尚|購時尚|富邦momo|shopping|shop\s*(?:channel|tv|lc)|\b(?:qvc|hsn|tvsn|tsc|hse24?|jml)\b/i.test(
+    `${channel.name} ${channel.category}`
+  );
+}
 export function mergeLiveChannels(channels: LiveChannel[]): LiveChannel[] {
   const merged = new Map<string, LiveChannel>();
   for (const channel of channels) {
+    if (isShoppingChannel(channel)) continue;
     const previous = merged.get(channel.id);
     merged.set(channel.id, {
       ...channel,
       urls: Array.from(new Set([...(previous?.urls || []), ...channel.urls])),
+      region: liveChannelRegion(channel),
+      ...(previous?.relayRequired?.length || channel.relayRequired?.length
+        ? {
+            relayRequired: Array.from(
+              new Set([
+                ...(previous?.relayRequired || []),
+                ...(channel.relayRequired || []),
+              ])
+            ),
+          }
+        : {}),
     });
   }
   return Array.from(merged.values()).sort((a, b) =>
@@ -69,6 +98,13 @@ export function parseLiveM3u(text: string, region = 'custom'): LiveChannel[] {
     const name =
       names[tvgId.split('.')[0]] ||
       rawName.replace(/\s*(?:\([^)]*\)|\[[^\]]*\])/g, '').trim();
+    if (
+      isShoppingChannel({
+        name: `${name} ${tvgId}`,
+        category: attribute('group-title'),
+      })
+    )
+      continue;
     const national = /^CCTV|^CGTN/i.test(tvgId || name);
     const category =
       region === 'custom'
@@ -81,22 +117,47 @@ export function parseLiveM3u(text: string, region = 'custom'): LiveChannel[] {
         ? '卫视'
         : '地方频道';
     const identity = tvgId || name.replace(/\s/g, '').toLowerCase();
-    channels.push({ id: `${region}:${identity}`, name, category, urls: [url] });
+    const country = tvgId.match(/\.([a-z]{2})$/i)?.[1]?.toLowerCase();
+    channels.push({
+      id: `${region}:${identity}`,
+      name,
+      category,
+      urls: [url],
+      region:
+        region === 'cn' ||
+        national ||
+        (region === 'custom' && (!country || country === 'cn'))
+          ? 'domestic'
+          : 'overseas',
+    });
   }
   return mergeLiveChannels(channels);
 }
 export function seededLiveChannels(): LiveChannel[] {
-  return world.map((channel) => ({
-    id: channel.id,
-    name: channel.name,
-    category: channel.category,
-    urls: channel.urls,
-    language: channel.language,
-    website: channel.website,
-    description: channel.description,
-    quality: channel.quality,
-    verification: channel.verification,
-  }));
+  return world
+    .filter((channel) => !isShoppingChannel(channel))
+    .map((channel) => ({
+      id: channel.id,
+      name: channel.name,
+      category: channel.category,
+      urls: channel.urls,
+      region: (channel.id.startsWith('cn:') ? 'domestic' : 'overseas') as
+        | 'domestic'
+        | 'overseas',
+      relayRequired: channel.id.startsWith('cn:')
+        ? channel.urls.filter((url) => url.startsWith('http:'))
+        : channel.urls,
+      language: channel.language,
+      website: channel.website,
+      sourceUrl: channel.sourceUrl,
+      description: channel.description,
+      quality: channel.quality,
+      verification:
+        channel.verification.method === 'upstream-decode' &&
+        Date.now() - Date.parse(channel.verification.checkedAt) > 48 * 3600000
+          ? { ...channel.verification, method: '历史上游检测，待复测' }
+          : channel.verification,
+    }));
 }
 export const LIVE_STORAGE_KEY = 'moontv_live_preferences_v1';
 export interface LivePreferences {

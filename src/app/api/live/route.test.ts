@@ -43,11 +43,11 @@ function responseFor(url: string) {
         checked_at: checked,
         channels: [
           satellite,
-          { ...satellite, name: '地方台', group: '地方台' },
-          { ...satellite, name: '标清卫视', resolution: '720x576' },
+          { ...satellite, name: '好易购', group: '地方台' },
+          { ...satellite, name: '购物频道', resolution: '720x576' },
           {
             ...satellite,
-            name: 'HTTP卫视',
+            name: 'HTTP地方新闻',
             url: 'http://media.example.com/live.m3u8',
           },
         ],
@@ -109,7 +109,7 @@ it('only refreshes approved stations on trusted CDNs and adds decoded HTTPS HD s
   ).toBe(true);
   expect(
     body.channels.some((c: { name: string }) =>
-      /地方台|标清卫视|HTTP卫视|Ads/.test(c.name)
+      /好易购|购物频道|Ads/.test(c.name)
     )
   ).toBe(false);
   expect(
@@ -117,7 +117,11 @@ it('only refreshes approved stations on trusted CDNs and adds decoded HTTPS HD s
       c.urls.every((u) => !u.includes('untrusted.example.net'))
     )
   ).toBe(true);
-  expect(body.channels).toHaveLength(seededLiveChannels().length + 1);
+  expect(body.channels).toHaveLength(seededLiveChannels().length + 2);
+  expect(
+    body.channels.find((c: { name: string }) => c.name === 'HTTP地方新闻')
+      .relayRequired
+  ).toEqual(['http://media.example.com/live.m3u8']);
 });
 it('treats current reports with no eligible HD HLS as an empty supplement, without inventing channels', async () => {
   fetchMock.mockImplementation((url: string) =>
@@ -126,7 +130,7 @@ it('treats current reports with no eligible HD HLS as an empty supplement, witho
         ? new Response(
             JSON.stringify({
               checked_at: checked,
-              channels: [{ ...satellite, resolution: '720x576' }],
+              channels: [{ ...satellite, resolution: '0x0' }],
             })
           )
         : responseFor(url)
@@ -176,4 +180,35 @@ it('deduplicates concurrent updates, caches fresh data for 30 minutes and failed
   now += 2000;
   await GET();
   expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 2) * 3);
+});
+
+it('prioritizes recent verified HTTPS over old seed and HTTP alternatives for a known domestic channel', async () => {
+  const seed = configs.find((channel) => channel.name === '宁夏卫视');
+  if (!seed) throw new Error('Missing domestic fixture');
+  const verifiedHttps = 'https://media.example.com/verified.m3u8';
+  const verifiedHttp = 'http://media.example.com/verified.m3u8';
+  fetchMock.mockImplementation((url: string) =>
+    Promise.resolve(
+      url === DAILY_CHANNELS_URL
+        ? new Response(
+            JSON.stringify({
+              checked_at: checked,
+              channels: [
+                { ...satellite, name: seed.name, url: verifiedHttp },
+                { ...satellite, name: seed.name, url: verifiedHttps },
+              ],
+            })
+          )
+        : responseFor(url)
+    )
+  );
+  const body = await (await loadRoute().GET()).json();
+  const channel = body.channels.find(
+    (item: { id: string }) => item.id === seed.id
+  );
+  expect(channel.urls[0]).toBe(verifiedHttps);
+  expect(channel.urls.indexOf(seed.urls[0])).toBeLessThan(
+    channel.urls.indexOf(verifiedHttp)
+  );
+  expect(channel.relayRequired).toContain(verifiedHttp);
 });

@@ -1,4 +1,5 @@
-import type { LiveChannel } from './live';
+import { isShoppingChannel, LiveChannel } from './live';
+import { validateLiveRelayUrl } from './live-relay';
 
 export interface WorldLiveSource extends LiveChannel {
   feed: string;
@@ -25,12 +26,12 @@ const MAINLAND_SATELLITES = new Set(
 );
 const MAX_AGE = 48 * 60 * 60 * 1000;
 
-function httpsHls(value: unknown): string | null {
+function hlsUrl(value: unknown, allowHttp = false): string | null {
   if (typeof value !== 'string') return null;
   try {
-    const url = new URL(value);
+    const url = validateLiveRelayUrl(value);
     if (
-      url.protocol !== 'https:' ||
+      (!allowHttp && url.protocol !== 'https:') ||
       url.username ||
       url.password ||
       !/\.m3u8$/i.test(url.pathname)
@@ -85,11 +86,24 @@ export function verifiedSatelliteChannels(
         : null;
     const width = Number(resolution?.[1] || 0),
       height = Number(resolution?.[2] || 0);
-    const url = httpsHls(item.url);
+    const url = hlsUrl(item.url, true);
+    const region = typeof item.region === 'string' ? item.region : '';
+    const excluded =
+      /港澳台|香港|澳门|澳門|台湾|台灣|外语|國際|国际|电影|更新时间|测试|購物/.test(
+        name + group + region
+      );
+    const domestic =
+      /^CCTV|^CGTN/i.test(name) ||
+      item.kind === '地方台' ||
+      MAINLAND_SATELLITES.has(name.replace(/高清|标清|HD|SD|\s/gi, '')) ||
+      /地方|省台|市台|县台|新闻|综合|公共|教育|经济|经视|都市|民生|文旅|文艺|影视|体育|交通|农村|农科|生活|少儿|动漫|音乐|财经|科教/.test(
+        name + group
+      );
     if (
       !name ||
-      !/卫视/.test(name + group) ||
-      /地方台|市台|县台/.test(group) ||
+      !domestic ||
+      (excluded && !/^CCTV|^CGTN/i.test(name)) ||
+      isShoppingChannel({ name, category: group }) ||
       item.ok !== true ||
       item.reason !== 'passed' ||
       !Number.isFinite(Number(item.frames)) ||
@@ -97,8 +111,8 @@ export function verifiedSatelliteChannels(
       !Array.isArray(item.errors) ||
       item.errors.length ||
       !checkedAt ||
-      width < 1280 ||
-      height < 720 ||
+      width < 320 ||
+      height < 240 ||
       !url
     )
       continue;
@@ -109,20 +123,41 @@ export function verifiedSatelliteChannels(
       )
       .replace(/\s+/g, '')
       .trim();
-    if (!canonical || !MAINLAND_SATELLITES.has(canonical)) continue;
+    if (!canonical) continue;
     const id = `cn:${canonical}`;
-    const quality = height >= 2160 ? '4K' : height >= 1080 ? '1080p' : '720p';
+    const quality = height >= 2160 ? '4K' : `${height}p`;
     const previous = channels.get(id);
     if (previous) {
       if (!previous.urls.includes(url)) previous.urls.push(url);
+      if (url.startsWith('http:') && !previous.relayRequired?.includes(url))
+        previous.relayRequired?.push(url);
     } else
       channels.set(id, {
         id,
         name: canonical,
-        category: '高清卫视',
+        category: /^CCTV|^CGTN/i.test(canonical)
+          ? '央视'
+          : MAINLAND_SATELLITES.has(canonical)
+          ? '卫视'
+          : '地方频道',
+        region: 'domestic',
         urls: [url],
+        relayRequired: url.startsWith('http:') ? [url] : [],
         quality,
-        language: '普通话',
+        language:
+          typeof item.language === 'string'
+            ? item.language
+            : /^CGTN/i.test(canonical)
+            ? /法语|French/i.test(canonical)
+              ? '法语'
+              : /西语|Spanish/i.test(canonical)
+              ? '西班牙语'
+              : /阿语|Arabic/i.test(canonical)
+              ? '阿拉伯语'
+              : /俄语|Russian/i.test(canonical)
+              ? '俄语'
+              : '英语'
+            : '',
         verification: { checkedAt, method: 'upstream-decode' },
       });
   }
@@ -146,7 +181,7 @@ export function worldChannelCandidates(
     const id = metadata.match(/tvg-id="([^"]*)"/i)?.[1] || '';
     const label = metadata;
     metadata = '';
-    const url = httpsHls(line);
+    const url = hlsUrl(line);
     const withoutQuality = (value: string) =>
       value.replace(/@(HD|SD|FHD|UHD|4K|8K)$/i, '');
     const identityMatches = source.tvgIds.some(
