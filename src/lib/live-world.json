@@ -1,0 +1,218 @@
+[
+  {
+    "id": "world:dw-en",
+    "name": "DW English",
+    "category": "国际新闻与纪录",
+    "language": "英语",
+    "website": "https://www.dw.com/en/live-tv/channel-english",
+    "feed": "de",
+    "tvgIds": ["DW.de@English"],
+    "urls": [
+      "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/master.m3u8"
+    ],
+    "trustedHosts": ["dwamdstream102.akamaized.net"],
+    "quality": "标称高清",
+    "description": "官方公开直播候选，播放情况以实际连接为准。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "world:nhk-world",
+    "name": "NHK WORLD-JAPAN",
+    "category": "文化与纪录",
+    "language": "英语",
+    "website": "https://www3.nhk.or.jp/nhkworld/en/live/",
+    "feed": "jp",
+    "tvgIds": ["NHKWorldJapan.jp@SD", "NHKWorldJapan.jp@HD"],
+    "urls": [
+      "https://masterpl.hls.nhkworld.jp/hls/w/live/smarttv.m3u8",
+      "https://media-osa.hls.nhkworld.jp/hls/w/live/master.m3u8",
+      "https://media-tyo.hls.nhkworld.jp/hls/w/live/master.m3u8"
+    ],
+    "trustedHosts": [
+      "masterpl.hls.nhkworld.jp",
+      "media-osa.hls.nhkworld.jp",
+      "media-tyo.hls.nhkworld.jp"
+    ],
+    "quality": "标称高清",
+    "description": "官方公开直播候选，播放情况以实际连接为准。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "world:france24-en",
+    "name": "France 24 · 英语",
+    "category": "国际新闻与纪录",
+    "language": "英语",
+    "website": "https://www.france24.com/en/live",
+    "feed": "fr",
+    "tvgIds": ["France24.fr@English"],
+    "urls": [
+      "https://live.france24.com/hls/live/2037218/F24_EN_HI_HLS/master_5000.m3u8",
+      "https://live.france24.com/hls/live/2037218-b/F24_EN_HI_HLS/master_5000.m3u8"
+    ],
+    "trustedHosts": ["live.france24.com"],
+    "quality": "标称1080p",
+    "description": "官方公开直播候选，播放情况以实际连接为准。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "world:france24-fr",
+    "name": "France 24 · 法语",
+    "category": "国际新闻与纪录",
+    "language": "法语",
+    "website": "https://www.france24.com/fr/direct",
+    "feed": "fr",
+    "tvgIds": ["France24.fr@French"],
+    "urls": [
+      "https://live.france24.com/hls/live/2037179/F24_FR_HI_HLS/master_5000.m3u8",
+      "https://live.france24.com/hls/live/2037179-b/F24_FR_HI_HLS/master_5000.m3u8"
+    ],
+    "trustedHosts": ["live.france24.com"],
+    "quality": "标称1080p",
+    "description": "官方公开直播候选，播放情况以实际连接为准。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "world:france24-es",
+    "name": "France 24 · 西班牙语",
+    "category": "国际新闻与纪录",
+    "language": "西班牙语",
+    "website": "https://www.france24.com/es/en-vivo",
+    "feed": "fr",
+    "tvgIds": ["France24.fr@Spanish"],
+    "urls": [
+      "https://live.france24.com/hls/live/2037220/F24_ES_HI_HLS/master_5000.m3u8",
+      "https://live.france24.com/hls/live/2037220-b/F24_ES_HI_HLS/master_5000.m3u8"
+    ],
+    "trustedHosts": ["live.france24.com"],
+    "quality": "标称1080p",
+    "description": "官方公开直播候选，播放情况以实际连接为准。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "world:aljazeera-en",
+    "name": "Al Jazeera English",
+    "category": "国际新闻与纪录",
+    "language": "英语",
+    "website": "https://www.aljazeera.com/video/live",
+    "feed": "qa",
+    "tvgIds": ["AlJazeera.qa@English"],
+    "urls": [
+      "https://live-hls-apps-aje-fa.getaj.net/AJE/index.m3u8",
+      "https://live-hls-apps-aje-v3-fa.getaj.net/AJE/index.m3u8"
+    ],
+    "trustedHosts": [
+      "live-hls-apps-aje-fa.getaj.net",
+      "live-hls-apps-aje-v3-fa.getaj.net"
+    ],
+    "quality": "标称1080p",
+    "description": "官方公开直播候选，播放情况以实际连接为准。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "world:euronews-en",
+    "name": "Euronews English",
+    "category": "国际新闻与纪录",
+    "language": "英语",
+    "website": "https://www.euronews.com/live",
+    "feed": "fr",
+    "tvgIds": ["EuronewsEnglish.fr@SD"],
+    "urls": [
+      "https://cdn-euronews.akamaized.net/live/eds/euronews-en/25002/index.m3u8"
+    ],
+    "trustedHosts": ["cdn-euronews.akamaized.net"],
+    "quality": "标称720p",
+    "description": "官方公开直播候选，播放情况以实际连接为准。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "world:dw-es",
+    "name": "DW Español",
+    "category": "国际新闻与纪录",
+    "language": "西班牙语",
+    "website": "https://www.dw.com/es/",
+    "feed": "de",
+    "tvgIds": ["DW.de@Espanol"],
+    "urls": [
+      "https://dwamdstream104.akamaized.net/hls/live/2015530/dwstream104/master.m3u8"
+    ],
+    "trustedHosts": ["dwamdstream104.akamaized.net"],
+    "quality": "标称1080p",
+    "description": "官方公开直播候选，播放情况以实际连接为准。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "world:trt-world",
+    "name": "TRT World",
+    "category": "国际新闻与纪录",
+    "language": "英语",
+    "website": "https://www.trtworld.com/live",
+    "feed": "tr",
+    "tvgIds": ["TRTWorld.tr@SD"],
+    "urls": ["https://tv-trtworld.medya.trt.com.tr/master.m3u8"],
+    "trustedHosts": ["tv-trtworld.medya.trt.com.tr"],
+    "quality": "标称1080p",
+    "description": "官方国际新闻与纪录节目，部分时段可能无直播。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "cn:ShenzhenSatelliteTV.cn",
+    "name": "深圳卫视 4K",
+    "category": "高清卫视",
+    "language": "普通话",
+    "website": "https://www.sztv.com.cn/",
+    "feed": "cn",
+    "tvgIds": ["ShenzhenSatelliteTV.cn@SD"],
+    "urls": ["https://livepull-tcms.sztv.com.cn/live/sz4Kpgm.m3u8"],
+    "trustedHosts": ["livepull-tcms.sztv.com.cn"],
+    "quality": "标称4K",
+    "description": "官方品牌直播域，目录标称4K；尚未解码验证，部分浏览器可能不支持编码。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  },
+  {
+    "id": "cn:YunnanSatelliteTV.cn",
+    "name": "云南卫视",
+    "category": "高清卫视",
+    "language": "普通话",
+    "website": "https://www.yntv.cn/",
+    "feed": "cn",
+    "tvgIds": ["YunnanSatelliteTV.cn@SD"],
+    "urls": ["https://hwapi.yunshicloud.com/8xughf/e0bx15.m3u8"],
+    "trustedHosts": ["hwapi.yunshicloud.com"],
+    "quality": "标称1080p",
+    "description": "卫视公开HTTPS候选；尚未解码验证。",
+    "verification": {
+      "method": "官方页面与目录核对，未实测",
+      "checkedAt": ""
+    }
+  }
+]

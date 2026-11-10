@@ -13,6 +13,8 @@ interface ApiSearchItem {
   vod_year?: string;
   vod_content?: string;
   vod_douban_id?: number;
+  vod_lang?: string;
+  vod_area?: string;
   type_name?: string;
 }
 
@@ -88,10 +90,13 @@ export async function searchFromApi(
         desc: cleanHtmlTags(item.vod_content || ''),
         type_name: item.type_name,
         douban_id: item.vod_douban_id,
+        language: item.vod_lang,
+        region: item.vod_area,
       };
     });
 
-    const MAX_SEARCH_PAGES = maxSearchPages ?? (await getConfig()).SiteConfig.SearchDownstreamMaxPage;
+    const MAX_SEARCH_PAGES =
+      maxSearchPages ?? (await getConfig()).SiteConfig.SearchDownstreamMaxPage;
 
     // 获取总页数
     const pageCount = data.pagecount || 1;
@@ -103,7 +108,11 @@ export async function searchFromApi(
       const additionalPagePromises = [];
 
       for (let page = 2; page <= pagesToFetch + 1; page++) {
-        const pageUrl = sourceApiUrl(apiBaseUrl, { ac: 'videolist', wd: query, pg: page.toString() });
+        const pageUrl = sourceApiUrl(apiBaseUrl, {
+          ac: 'videolist',
+          wd: query,
+          pg: page.toString(),
+        });
 
         const pagePromise = (async () => {
           try {
@@ -132,7 +141,8 @@ export async function searchFromApi(
 
               // 使用正则表达式从 vod_play_url 提取 m3u8 链接
               if (item.vod_play_url) {
-                const m3u8Regex = /\$(https?:\/\/[^"'\s#]+?\.m3u8(?:\?[^"'\s#]*)?)/g;
+                const m3u8Regex =
+                  /\$(https?:\/\/[^"'\s#]+?\.m3u8(?:\?[^"'\s#]*)?)/g;
                 episodes = item.vod_play_url.match(m3u8Regex) || [];
               }
 
@@ -156,6 +166,8 @@ export async function searchFromApi(
                 desc: cleanHtmlTags(item.vod_content || ''),
                 type_name: item.type_name,
                 douban_id: item.vod_douban_id,
+                language: item.vod_lang,
+                region: item.vod_area,
               };
             });
           } catch (error) {
@@ -262,6 +274,8 @@ export async function getDetailFromApi(
     desc: cleanHtmlTags(videoDetail.vod_content),
     type_name: videoDetail.type_name,
     douban_id: videoDetail.vod_douban_id,
+    language: videoDetail.vod_lang,
+    region: videoDetail.vod_area,
   };
 }
 

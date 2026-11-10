@@ -1,173 +1,179 @@
 /** @jest-environment node */
-
 import { Request, Response } from 'next/dist/compiled/@edge-runtime/primitives';
 
-import { LIVE_REGIONS, seededLiveChannels } from '@/lib/live';
-
-// Exercise Next's Edge response primitives in Jest 27's pre-Fetch environment.
+import { seededLiveChannels } from '@/lib/live';
+import {
+  DAILY_CHANNELS_URL,
+  DAILY_STATUS_URL,
+  WorldLiveSource,
+} from '@/lib/live-upstreams';
+import world from '@/lib/live-world.json';
 Object.assign(global, { Request, Response });
 function loadRoute(): { GET: () => Promise<Response> } {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   return require('./route');
 }
-const originalFetch = global.fetch;
+const configs = world as WorldLiveSource[];
+const feeds = Array.from(
+  new Set(configs.map((s) => s.feed).filter((f) => /^[a-z]{2}$/.test(f)))
+);
 const fetchMock = jest.fn();
-let now = 2_000_000_000;
-const playlist = (region: string) => `#EXTM3U
-#EXTINF:-1 tvg-id="test-${region}@HD",Test ${region}
-https://media.example.com/${region}/hd.m3u8
-#EXTINF:-1 tvg-id="test-${region}@SD",Test ${region}
-https://media.example.com/${region}/sd.m3u8
-#EXTINF:-1 tvg-id="insecure",HTTP only
-http://media.example.com/insecure.m3u8
-`;
-const regionOf = (url: string) => url.match(/\/([a-z]+)\.m3u$/)?.[1] || '';
-const successfulFetch = (url: string) =>
-  Promise.resolve(new Response(playlist(regionOf(url))));
-
+const originalFetch = global.fetch;
+let now = Date.parse('2026-11-10T08:00:00Z');
+const checked = '2026-11-10T04:32:44Z';
+const satellite = {
+  name: '湖南卫视高清',
+  group: '卫视',
+  url: 'https://media.example.com/satellite.m3u8',
+  resolution: '1920x1080',
+  checked_at: checked,
+  ok: true,
+  reason: 'passed',
+  frames: 500,
+  errors: [],
+};
+function responseFor(url: string) {
+  if (url === DAILY_STATUS_URL)
+    return new Response(
+      JSON.stringify({ state: 'ok', last_success_at: checked })
+    );
+  if (url === DAILY_CHANNELS_URL)
+    return new Response(
+      JSON.stringify({
+        checked_at: checked,
+        channels: [
+          satellite,
+          { ...satellite, name: '地方台', group: '地方台' },
+          { ...satellite, name: '标清卫视', resolution: '720x576' },
+          {
+            ...satellite,
+            name: 'HTTP卫视',
+            url: 'http://media.example.com/live.m3u8',
+          },
+        ],
+      })
+    );
+  const feed = url.match(/\/([a-z]+)\.m3u$/)?.[1];
+  const parts = ['#EXTM3U'];
+  for (const source of configs.filter((s) => s.feed === feed)) {
+    if (!source.tvgIds.length || !source.trustedHosts.length) continue;
+    parts.push(
+      `#EXTINF:-1 tvg-id="${source.tvgIds[0]}",${source.name}`,
+      `https://${source.trustedHosts[0]}/fresh.m3u8`
+    );
+    parts.push(
+      `#EXTINF:-1 tvg-id="${source.tvgIds[0]}",Anonymous`,
+      'https://untrusted.example.net/live.m3u8'
+    );
+  }
+  parts.push(
+    '#EXTINF:-1 tvg-id="UnreviewedChannel",Ads',
+    'https://untrusted.example.net/ads.m3u8'
+  );
+  return new Response(parts.join('\n'));
+}
 beforeEach(() => {
   jest.resetModules();
-  now = 2_000_000_000;
+  now = Date.parse('2026-11-10T08:00:00Z');
   jest.spyOn(Date, 'now').mockImplementation(() => now);
   fetchMock.mockReset();
   global.fetch = fetchMock;
 });
-afterEach(() => {
-  jest.restoreAllMocks();
-});
+afterEach(() => jest.restoreAllMocks());
 afterAll(() => {
   global.fetch = originalFetch;
 });
-
-it('returns the bundled channels when every upstream fails, without claiming a fresh update', async () => {
-  fetchMock.mockRejectedValue(new Error('upstream unavailable'));
+it('retains reviewed seeds on outage and does not claim a successful update', async () => {
+  fetchMock.mockRejectedValue(new Error('down'));
   const { GET } = loadRoute();
   const response = await GET();
-  expect(response.status).toBe(200);
-  expect(response.headers.get('Cache-Control')).toBe('private, no-store');
   const body = await response.json();
+  expect(response.headers.get('Cache-Control')).toBe('private, no-store');
   expect(body).toMatchObject({
-    channels: seededLiveChannels(),
+    channels: expect.arrayContaining(seededLiveChannels()),
     updatedAt: 0,
     fallback: true,
   });
-  expect(fetchMock).toHaveBeenCalledTimes(4);
+  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 2);
 });
-
-it('fetches only the four fixed regional playlists, merging alternate HTTPS lines', async () => {
-  fetchMock.mockImplementation(successfulFetch);
+it('only refreshes approved stations on trusted CDNs and adds decoded HTTPS HD satellites', async () => {
+  fetchMock.mockImplementation((url: string) =>
+    Promise.resolve(responseFor(url))
+  );
   const { GET } = loadRoute();
   const body = await (await GET()).json();
-  expect(body.updatedAt).toBe(now);
   expect(body.fallback).toBe(false);
-  expect(body.channels).toHaveLength(4);
-  for (const region of LIVE_REGIONS) {
-    expect(fetchMock).toHaveBeenCalledWith(
-      `https://raw.githubusercontent.com/iptv-org/iptv/master/streams/${region}.m3u`,
-      expect.objectContaining({ cache: 'no-store', signal: expect.anything() })
-    );
-    expect(body.channels).toContainEqual(
-      expect.objectContaining({
-        id: `${region}:test-${region}`,
-        urls: [
-          `https://media.example.com/${region}/hd.m3u8`,
-          `https://media.example.com/${region}/sd.m3u8`,
-        ],
-      })
-    );
-  }
+  expect(body.updatedAt).toBe(now);
+  expect(
+    body.channels.some((c: { id: string }) => c.id === 'cn:湖南卫视')
+  ).toBe(true);
+  expect(
+    body.channels.some((c: { name: string }) =>
+      /地方台|标清卫视|HTTP卫视|Ads/.test(c.name)
+    )
+  ).toBe(false);
+  expect(
+    body.channels.every((c: { urls: string[] }) =>
+      c.urls.every((u) => !u.includes('untrusted.example.net'))
+    )
+  ).toBe(true);
+  expect(body.channels).toHaveLength(seededLiveChannels().length + 1);
 });
-
-it('uses the affected region snapshot for empty or failed responses while retaining fresh regions', async () => {
-  fetchMock.mockImplementation((url: string) => {
-    const region = regionOf(url);
-    if (region === 'hk') return Promise.resolve(new Response('#EXTM3U'));
-    if (region === 'mo')
-      return Promise.resolve(new Response('unavailable', { status: 503 }));
-    return successfulFetch(url);
-  });
-  const { GET } = loadRoute();
-  const body = await (await GET()).json();
+it('treats current reports with no eligible HD HLS as an empty supplement, without inventing channels', async () => {
+  fetchMock.mockImplementation((url: string) =>
+    Promise.resolve(
+      url === DAILY_CHANNELS_URL
+        ? new Response(
+            JSON.stringify({
+              checked_at: checked,
+              channels: [{ ...satellite, resolution: '720x576' }],
+            })
+          )
+        : responseFor(url)
+    )
+  );
+  const body = await (await loadRoute().GET()).json();
+  expect(body.fallback).toBe(false);
+  expect(body.channels).toHaveLength(seededLiveChannels().length);
+});
+it('rejects stale or failed verification reports while retaining the reviewed international catalog', async () => {
+  fetchMock.mockImplementation((url: string) =>
+    Promise.resolve(
+      url === DAILY_STATUS_URL
+        ? new Response(
+            JSON.stringify({ state: 'failed', last_success_at: checked })
+          )
+        : responseFor(url)
+    )
+  );
+  const body = await (await loadRoute().GET()).json();
   expect(body.fallback).toBe(true);
+  expect(body.channels).toHaveLength(seededLiveChannels().length);
   expect(body.updatedAt).toBe(0);
-  for (const region of ['cn', 'tw'])
-    expect(body.channels).toContainEqual(
-      expect.objectContaining({ id: `${region}:test-${region}` })
-    );
-  const snapshots = seededLiveChannels().filter((channel) =>
-    /^(hk|mo):/.test(channel.id)
-  );
-  for (const snapshot of snapshots)
-    expect(body.channels).toContainEqual(snapshot);
-  expect(body.channels).not.toContainEqual(
-    expect.objectContaining({ id: 'hk:test-hk' })
-  );
 });
-
-it('reuses a fresh update and refreshes the regional lists after the cache expires', async () => {
-  fetchMock.mockImplementation(successfulFetch);
+it('deduplicates concurrent updates, caches fresh data for 30 minutes and failed updates for 60 seconds', async () => {
+  fetchMock.mockImplementation((url: string) =>
+    Promise.resolve(responseFor(url))
+  );
   const { GET } = loadRoute();
-  const first = await (await GET()).json();
-  now += 29 * 60 * 1000;
-  expect(await (await GET()).json()).toEqual(first);
-  expect(fetchMock).toHaveBeenCalledTimes(4);
-  now += 2 * 60 * 1000;
-  const refreshed = await (await GET()).json();
-  expect(fetchMock).toHaveBeenCalledTimes(8);
-  expect(refreshed.updatedAt).toBe(now);
-});
-
-it('shares one upstream update across concurrent requests', async () => {
-  let release!: () => void;
-  const blocked = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  fetchMock.mockImplementation(async (url: string) => {
-    await blocked;
-    return new Response(playlist(regionOf(url)));
-  });
-  const { GET } = loadRoute();
-  const pending = [GET(), GET(), GET()];
-  expect(fetchMock).toHaveBeenCalledTimes(4);
-  release();
-  const responses = await Promise.all(pending);
   const bodies = await Promise.all(
-    responses.map((response) => response.json())
+    [GET(), GET(), GET()].map(async (p) => (await p).json())
   );
   expect(bodies[0]).toEqual(bodies[1]);
-  expect(bodies[0]).toEqual(bodies[2]);
-  expect(bodies[0].fallback).toBe(false);
-  expect(fetchMock).toHaveBeenCalledTimes(4);
-});
-
-it('briefly caches failed updates and retries after 60 seconds instead of refetching on every page view', async () => {
-  fetchMock.mockRejectedValue(new Error('temporary outage'));
-  const { GET } = loadRoute();
+  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 2);
+  now += 29 * 60000;
+  await GET();
+  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 2);
+  now += 2 * 60000;
+  fetchMock.mockRejectedValue(new Error('outage'));
   const fallback = await (await GET()).json();
   expect(fallback.fallback).toBe(true);
-  expect(fallback.updatedAt).toBe(0);
-  expect(fetchMock).toHaveBeenCalledTimes(4);
-  now += 59_000;
-  expect(await (await GET()).json()).toEqual(fallback);
-  expect(fetchMock).toHaveBeenCalledTimes(4);
-  now += 2_000;
-  fetchMock.mockImplementation(successfulFetch);
-  const recovered = await (await GET()).json();
-  expect(fetchMock).toHaveBeenCalledTimes(8);
-  expect(recovered.fallback).toBe(false);
-  expect(recovered.updatedAt).toBe(now);
-  expect(recovered.channels).toHaveLength(4);
-});
-
-it('reports fallback separately from the timestamp of the last completely successful update', async () => {
-  fetchMock.mockImplementation(successfulFetch);
-  const { GET } = loadRoute();
-  const fresh = await (await GET()).json();
-  now += 31 * 60 * 1000;
-  fetchMock.mockRejectedValue(new Error('temporary outage'));
-  const fallback = await (await GET()).json();
-  expect(fallback.fallback).toBe(true);
-  expect(fallback.updatedAt).toBe(fresh.updatedAt);
-  expect(fallback.updatedAt).not.toBe(now);
-  expect(fetchMock).toHaveBeenCalledTimes(8);
+  expect(fallback.updatedAt).toBe(bodies[0].updatedAt);
+  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 2) * 2);
+  now += 59000;
+  await GET();
+  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 2) * 2);
+  now += 2000;
+  await GET();
+  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 2) * 3);
 });

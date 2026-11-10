@@ -1,4 +1,5 @@
 import { requestedEpisode } from './episode-progress';
+import { kidsPlaybackMatches } from './kids-resources';
 import { firstMeasuredSource, speedKBps } from './source-selection';
 import type { SearchResult } from './types';
 import type { VideoProbeResult } from './video-probe';
@@ -90,7 +91,9 @@ export function preparePlayback(
           typeof source.title === 'string' &&
           Array.isArray(source.episodes) &&
           source.episodes.length > 0 &&
-          normalized(source.title) === normalized(title) &&
+          (params.get('kids_id')
+            ? kidsPlaybackMatches(params, source)
+            : normalized(source.title) === normalized(title)) &&
           (!year || source.year === year) &&
           (!type ||
             (type === 'movie'
@@ -121,6 +124,8 @@ export function preparePlayback(
         const source: SearchResult = await response.json();
         if (!Array.isArray(source.episodes) || !source.episodes.length)
           throw new Error('No episodes');
+        if (!kidsPlaybackMatches(params, source))
+          throw new Error('Requested language or season is unavailable');
         sources.push(source);
       } catch {
         failed = true;

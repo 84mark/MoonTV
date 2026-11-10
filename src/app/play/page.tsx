@@ -26,6 +26,7 @@ import {
   requestedEpisode,
   storedEpisode,
 } from '@/lib/episode-progress';
+import { kidsLanguage, kidsPlaybackMatches } from '@/lib/kids-resources';
 import { findPlayRecord } from '@/lib/play-records';
 import { getPreparedPlayback } from '@/lib/playback-preload';
 import { DownloadMeter } from '@/lib/playback-stats';
@@ -459,6 +460,8 @@ function PlayPageClient() {
           throw new Error('获取视频详情失败');
         }
         const detailData = (await detailResponse.json()) as SearchResult;
+        if (!kidsPlaybackMatches(searchParams, detailData))
+          throw new Error('所选语言或季数暂无可用片源');
         setAvailableSources([detailData]);
         return [detailData];
       } catch (err) {
@@ -483,8 +486,10 @@ function PlayPageClient() {
         // 处理搜索结果，根据规则过滤
         const results = data.results.filter(
           (result: SearchResult) =>
-            result.title.replaceAll(' ', '').toLowerCase() ===
-              videoTitleRef.current.replaceAll(' ', '').toLowerCase() &&
+            (searchParams.get('kids_id')
+              ? kidsPlaybackMatches(searchParams, result)
+              : result.title.replaceAll(' ', '').toLowerCase() ===
+                videoTitleRef.current.replaceAll(' ', '').toLowerCase()) &&
             (videoYearRef.current
               ? result.year.toLowerCase() === videoYearRef.current.toLowerCase()
               : true) &&
@@ -530,7 +535,9 @@ function PlayPageClient() {
       const prepared = candidate;
       let sourcesInfo: SearchResult[];
       if (prepared && prepared.snapshot.sources.length > 0) {
-        sourcesInfo = prepared.snapshot.sources;
+        sourcesInfo = prepared.snapshot.sources.filter((source) =>
+          kidsPlaybackMatches(searchParams, source)
+        );
         setAvailableSources(sourcesInfo);
         setSourceSearchLoading(false);
       } else {
@@ -548,7 +555,11 @@ function PlayPageClient() {
         sourcesInfo = await fetchSourceDetail(currentSource, currentId);
       }
       if (sourcesInfo.length === 0) {
-        setError('未找到匹配结果');
+        setError(
+          searchParams.has('kids_id')
+            ? '所选语言或季数暂无可用片源，请返回选择其他版本。'
+            : '未找到匹配结果'
+        );
         setLoading(false);
         return;
       }
@@ -713,8 +724,12 @@ function PlayPageClient() {
       const newDetail = availableSources.find(
         (source) => source.source === newSource && source.id === newId
       );
-      if (!newDetail) {
-        setError('未找到匹配结果');
+      if (!newDetail || !kidsPlaybackMatches(searchParams, newDetail)) {
+        setError(
+          searchParams.has('kids_id')
+            ? '所选语言或季数暂无可用片源，请返回选择其他版本。'
+            : '未找到匹配结果'
+        );
         return;
       }
 
@@ -931,6 +946,14 @@ function PlayPageClient() {
         total_time: Math.floor(duration),
         save_time: Date.now(),
         search_title: searchTitle,
+        ...(searchParams.get('kids_id') &&
+        searchParams.get('kids_language') &&
+        kidsPlaybackMatches(searchParams, detailRef.current)
+          ? {
+              kids_id: searchParams.get('kids_id') || undefined,
+              kids_language: searchParams.get('kids_language') || undefined,
+            }
+          : {}),
       });
 
       lastSaveTimeRef.current = Date.now();
@@ -1600,6 +1623,25 @@ function PlayPageClient() {
               </span>
             )}
           </h1>
+          {searchParams.has('kids_id') && (
+            <span
+              aria-label='播放语言'
+              className='mt-2 inline-flex rounded-full bg-sky-100 px-3 py-1 text-sm font-semibold text-sky-700 dark:bg-sky-900/50 dark:text-sky-200'
+            >
+              {(() => {
+                const language = kidsLanguage(
+                  detail || {
+                    title: '',
+                    language: searchParams.get('kids_language') || '',
+                  }
+                );
+                return language.code === 'unknown' ||
+                  language.code.startsWith('multi')
+                  ? language.label
+                  : `${language.label}版`;
+              })()}
+            </span>
+          )}
         </div>
         <PlaybackStartup steps={startup.steps} />
         {/* 第二行：播放器和选集 */}

@@ -118,3 +118,72 @@ it('prepares the explicitly selected episode and its successor, reusing neither 
     (getVideoResolutionFromM3u8 as jest.Mock).mock.calls.map((call) => call[0])
   ).toEqual(['third', 'fourth']);
 });
+
+it('keeps a selected children language and season even when another language is faster', async () => {
+  const english = {
+    ...a,
+    title: '小猪佩奇 第一季 英语版',
+    language: '英语',
+    episodes: ['english-one', 'english-two'],
+  };
+  const mandarin = {
+    ...b,
+    title: '小猪佩奇 第一季 国语版',
+    language: '普通话',
+    episodes: ['mandarin-one', 'mandarin-two'],
+  };
+  const laterSeason = {
+    ...english,
+    id: '2',
+    title: '小猪佩奇 第二季 英文版',
+    episodes: ['english-season-two'],
+  };
+  (fetch as jest.Mock).mockResolvedValueOnce(
+    response([mandarin, laterSeason, english])
+  );
+  (getVideoResolutionFromM3u8 as jest.Mock).mockImplementation(
+    async (url: string) =>
+      result(url.startsWith('mandarin') ? '10 MB/s' : '100 KB/s')
+  );
+  const session = preparePlayback(
+    new URLSearchParams({
+      title: '小猪佩奇 第1季 英文版',
+      year: '2026',
+      kids_id: 'peppa',
+      kids_language: 'en',
+      stype: 'tv',
+    }).toString()
+  );
+  await flush();
+  expect(session.snapshot.sources).toEqual([english]);
+  expect(session.snapshot.selected).toEqual(english);
+  expect(
+    (getVideoResolutionFromM3u8 as jest.Mock).mock.calls.map((call) => call[0])
+  ).toEqual(['english-one', 'english-two']);
+});
+it('does not admit a mismatched language through a selected-source detail fallback', async () => {
+  (fetch as jest.Mock)
+    .mockResolvedValueOnce(response([]))
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ...a,
+        title: '小猪佩奇 第一季',
+        language: '普通话',
+        episodes: ['mandarin'],
+      }),
+    });
+  const session = preparePlayback(
+    new URLSearchParams({
+      title: '小猪佩奇 第一季',
+      kids_id: 'peppa',
+      kids_language: 'en',
+      source: 'a',
+      id: '1',
+    }).toString()
+  );
+  await flush();
+  expect(session.snapshot.sources).toEqual([]);
+  expect(session.snapshot.selected).toBeNull();
+  expect(getVideoResolutionFromM3u8).not.toHaveBeenCalled();
+});

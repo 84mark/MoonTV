@@ -1,10 +1,16 @@
-import seed from './live-seed.json';
+import world from './live-world.json';
 
 export interface LiveChannel {
   id: string;
   name: string;
   category: string;
   urls: string[];
+  relayRequired?: string[];
+  language?: string;
+  website?: string;
+  description?: string;
+  quality?: string;
+  verification?: { method: string; checkedAt: string };
 }
 export const LIVE_REGIONS = ['cn', 'hk', 'mo', 'tw'] as const;
 const names: Record<string, string> = {
@@ -80,9 +86,17 @@ export function parseLiveM3u(text: string, region = 'custom'): LiveChannel[] {
   return mergeLiveChannels(channels);
 }
 export function seededLiveChannels(): LiveChannel[] {
-  return mergeLiveChannels(
-    seed.playlists.flatMap((p) => parseLiveM3u(p.text, p.region))
-  );
+  return world.map((channel) => ({
+    id: channel.id,
+    name: channel.name,
+    category: channel.category,
+    urls: channel.urls,
+    language: channel.language,
+    website: channel.website,
+    description: channel.description,
+    quality: channel.quality,
+    verification: channel.verification,
+  }));
 }
 export const LIVE_STORAGE_KEY = 'moontv_live_preferences_v1';
 export interface LivePreferences {

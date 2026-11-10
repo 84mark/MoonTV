@@ -45,7 +45,15 @@ it('retains commas inside quoted attributes and keeps same-named regional channe
 });
 it('ships real HTTPS channel lists with alternate lines', () => {
   const channels = seededLiveChannels();
-  expect(channels.length).toBeGreaterThan(50);
+  expect(channels.length).toBeGreaterThanOrEqual(8);
+  expect(
+    channels.every((c) => !['地方频道', '港澳台'].includes(c.category))
+  ).toBe(true);
+  expect(
+    channels
+      .filter((c) => c.id.startsWith('cn:'))
+      .every((c) => c.category === '高清卫视')
+  ).toBe(true);
   expect(channels.some((c) => c.urls.length > 1)).toBe(true);
   expect(
     channels.every((c) => c.urls.every((u) => u.startsWith('https://')))

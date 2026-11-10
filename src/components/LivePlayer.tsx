@@ -12,6 +12,27 @@ import type { VideoProbeResult } from '@/lib/video-probe';
 import PlaybackStats from '@/components/PlaybackStats';
 
 const sound = { muted: true, volume: 0.7 };
+type PlaybackMode = 'auto' | 'direct' | 'relay';
+const isBuiltinChannel = (id: string) => /^(cn|hk|mo|tw|world):/.test(id);
+function sourcePlaybackUrl(
+  id: string,
+  url: string,
+  index: number,
+  mode: PlaybackMode,
+  relayRequired: string[]
+): string {
+  // A failed browser request is not evidence of a mainland block. Automatic
+  // relay is opt-in per source URL and never applies to user-imported sources.
+  const relay =
+    isBuiltinChannel(id) &&
+    (mode === 'relay' || (mode === 'auto' && relayRequired.includes(url)));
+  return relay
+    ? `/api/live/stream?${new URLSearchParams({
+        channel: id,
+        line: String(index),
+      })}`
+    : url;
+}
 
 export default function LivePlayer({ channel }: { channel: LiveChannel }) {
   const container = useRef<HTMLDivElement>(null);
@@ -26,8 +47,9 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
     video: HTMLVideoElement;
   } | null>(null);
   const playlist = JSON.stringify(channel.urls);
-  const builtIn = /^(cn|hk|mo|tw):/.test(channel.id);
-  const [compatible, setCompatible] = useState(builtIn);
+  const builtIn = isBuiltinChannel(channel.id);
+  const relayPolicy = JSON.stringify(channel.relayRequired || []);
+  const [mode, setMode] = useState<PlaybackMode>('auto');
   const [errors, setErrors] = useState<string[]>([]);
   const [measurements, setMeasurements] = useState<
     Map<number, VideoProbeResult>
@@ -46,13 +68,9 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
       return;
     }
     setPreparing(builtIn);
+    const required: string[] = JSON.parse(relayPolicy);
     const targets = urls.map((url, index) =>
-      compatible && builtIn
-        ? `/api/live/stream?${new URLSearchParams({
-            channel: channel.id,
-            line: String(index),
-          })}`
-        : url
+      sourcePlaybackUrl(channel.id, url, index, mode, required)
     );
     let active = true;
     const session = probeLiveSources(
@@ -72,7 +90,7 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
       active = false;
       session.cancel();
     };
-  }, [playlist, compatible, builtIn, channel.id, probeVersion]);
+  }, [playlist, mode, builtIn, channel.id, probeVersion, relayPolicy]);
   useEffect(() => {
     if (!container.current || preparing) return;
     const urls: string[] = JSON.parse(playlist);
@@ -110,13 +128,13 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
     };
     const player = new Artplayer({
       container: container.current,
-      url:
-        compatible && builtIn
-          ? `/api/live/stream?${new URLSearchParams({
-              channel: channel.id,
-              line: String(line),
-            })}`
-          : urls[line],
+      url: sourcePlaybackUrl(
+        channel.id,
+        urls[line],
+        line,
+        mode,
+        JSON.parse(relayPolicy)
+      ),
       type: 'm3u8',
       isLive: true,
       autoplay: true,
@@ -213,7 +231,8 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
     playlist,
     line,
     retry,
-    compatible,
+    mode,
+    relayPolicy,
     builtIn,
     channel.id,
     preparing,
@@ -247,28 +266,34 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
           meter={meter}
           episode={line + 1}
           total={channel.urls.length}
-          mediaKey={`${channel.id}:${line}:${compatible}:${retry}`}
+          mediaKey={`${channel.id}:${line}:${mode}:${relayPolicy}:${retry}`}
           label={`${channel.name} · 线路 ${line + 1}`}
         />
       )}
       <div className='flex flex-wrap items-center gap-2 p-4'>
         {builtIn && (
           <div className='flex w-full gap-2 pb-2'>
-            {[true, false].map((value) => (
+            {(
+              [
+                { value: 'auto', label: '自动选择' },
+                { value: 'direct', label: '直连播放' },
+                { value: 'relay', label: '兼容播放' },
+              ] as const
+            ).map(({ value, label }) => (
               <button
                 key={String(value)}
-                aria-pressed={compatible === value}
+                aria-pressed={mode === value}
                 onClick={() => {
-                  setCompatible(value);
+                  setMode(value);
                   setRetry((v) => v + 1);
                 }}
                 className={`rounded-lg border px-3 py-2 text-xs ${
-                  compatible === value
+                  mode === value
                     ? 'border-blue-500 text-blue-600'
                     : 'border-gray-300 dark:border-gray-700'
                 }`}
               >
-                {value ? '兼容播放' : '直连播放'}
+                {label}
               </button>
             ))}
           </div>
@@ -349,7 +374,7 @@ export default function LivePlayer({ channel }: { channel: LiveChannel }) {
           </details>
         )}
         <p className='w-full text-xs text-gray-500'>
-          首次静音播放，切台保留音量。测速为目标线路短时媒体采样，速度不代表持续稳定性；可手动选源或跳过预检。
+          默认直连，仅已标记需要兼容的线路自动转发。首次静音播放，切台保留音量。测速为短时媒体采样，可手动选源或跳过预检。
         </p>
       </div>
     </section>

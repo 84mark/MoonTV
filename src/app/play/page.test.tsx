@@ -157,3 +157,87 @@ it('restores the latest merged episode even when the current source has no histo
     )
   );
 });
+
+const englishKids = {
+  ...a,
+  title: '小猪佩奇 第一季 英语版',
+  language: '英语',
+  episodes: ['english1', 'english2', 'english3'],
+};
+const mandarinKids = {
+  ...b,
+  title: '小猪佩奇 第一季 国语版',
+  language: '普通话',
+  episodes: ['mandarin1', 'mandarin2', 'mandarin3'],
+};
+it('does not optimize an English children selection into a faster Mandarin version', async () => {
+  query = new URLSearchParams({
+    title: '小猪佩奇 第1季 英文版',
+    year: '2026',
+    kids_id: 'peppa',
+    kids_language: 'en',
+    stype: 'tv',
+    prefer: 'true',
+    episode: '1',
+  }).toString();
+  (fetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    json: async () => ({ results: [mandarinKids, englishKids] }),
+  });
+  render(<PlayPage />);
+  await waitFor(() =>
+    expect(mockPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'english1' })
+    )
+  );
+  expect(
+    (getVideoResolutionFromM3u8 as jest.Mock).mock.calls.map((call) => call[0])
+  ).toEqual(['english1']);
+  expect(screen.getByLabelText('播放语言')).toHaveTextContent('英语版');
+});
+it('filters a prepared handoff before allowing a children source to reach the player', async () => {
+  query = new URLSearchParams({
+    title: '小猪佩奇 第一季 英语版',
+    year: '2026',
+    kids_id: 'peppa',
+    kids_language: 'en',
+    preload: 'handoff',
+    episode: '1',
+  }).toString();
+  (getPreparedPlayback as jest.Mock).mockReturnValue({
+    snapshot: {
+      sources: [mandarinKids, englishKids],
+      episodeIndex: 0,
+      results: new Map(),
+      selected: mandarinKids,
+    },
+  });
+  render(<PlayPage />);
+  await waitFor(() =>
+    expect(mockPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'english1' })
+    )
+  );
+  expect(mockPlayer).not.toHaveBeenCalledWith(
+    expect.objectContaining({ url: 'mandarin1' })
+  );
+});
+it('refuses a mismatched language returned by a direct source fallback', async () => {
+  query = new URLSearchParams({
+    title: '小猪佩奇 第一季',
+    year: '2026',
+    kids_id: 'peppa',
+    kids_language: 'en',
+    source: 'b',
+    id: '1',
+    episode: '1',
+  }).toString();
+  (fetch as jest.Mock)
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => mandarinKids });
+  render(<PlayPage />);
+  expect(
+    await screen.findByText('所选语言或季数暂无可用片源，请返回选择其他版本。')
+  ).toBeInTheDocument();
+  expect(mockPlayer).not.toHaveBeenCalled();
+});

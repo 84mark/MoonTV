@@ -51,9 +51,15 @@ export async function GET(request: Request) {
     subject.kind = kind;
     // Missing photos must never hide the synopsis or prevent playback.
     try {
-      subject.photos = parseDoubanPhotos(
-        await fetchDoubanRelated(id, kind, 'photos', 'count=12&start=0&type=S')
-      );
+      if (params.get('posterOnly') !== '1')
+        subject.photos = parseDoubanPhotos(
+          await fetchDoubanRelated(
+            id,
+            kind,
+            'photos',
+            'count=12&start=0&type=S'
+          )
+        );
     } catch {
       /* Optional gallery. */
     }

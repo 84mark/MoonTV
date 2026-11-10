@@ -136,6 +136,8 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
                     progress={getProgress(record)}
                     episodes={record.total_episodes}
                     currentEpisode={record.index}
+                    kidsId={record.kids_id}
+                    kidsLanguage={record.kids_language}
                     query={record.search_title}
                     from='playrecord'
                     onDelete={() =>

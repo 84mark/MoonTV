@@ -9,7 +9,11 @@ const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
-jest.mock('@/lib/db.client', () => ({}));
+jest.mock('@/lib/db.client', () => ({
+  isFavorited: async () => false,
+  generateStorageKey: (source: string, id: string) => `${source}+${id}`,
+  subscribeToDataUpdates: () => () => undefined,
+}));
 jest.mock('next/image', () => ({
   __esModule: true,
   default: (props: { src: string; alt: string; onError: () => void }) => (
@@ -138,3 +142,31 @@ it.each(['movie', 'tv', 'show'])(
     window.history.replaceState({}, '', '/');
   }
 );
+
+it('keeps the saved children language when reopening a continue-watching card', () => {
+  render(
+    <VideoCard
+      from='playrecord'
+      id='english-1'
+      source='family'
+      title='小猪佩奇 第一季'
+      poster={poster}
+      episodes={26}
+      currentEpisode={3}
+      kidsId='peppa'
+      kidsLanguage='multi:en+zh-CN'
+    />
+  );
+  fireEvent.click(
+    screen.getByRole('link', { name: '查看 小猪佩奇 第一季 的详情' })
+  );
+  const url = new URL(
+    mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
+    'https://example.test'
+  );
+  expect(url.pathname).toBe('/detail');
+  expect(url.searchParams.get('source')).toBe('family');
+  expect(url.searchParams.get('id')).toBe('english-1');
+  expect(url.searchParams.get('kids_id')).toBe('peppa');
+  expect(url.searchParams.get('kids_language')).toBe('multi:en+zh-CN');
+});

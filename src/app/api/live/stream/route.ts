@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         );
       const catalog = await getLiveCatalog();
       const channel = catalog.channels.find(
-        (c) => c.id === id && /^(cn|hk|mo|tw):/.test(c.id)
+        (c) => c.id === id && /^(cn|hk|mo|tw|world):/.test(c.id)
       );
       const url = channel?.urls[Number(rawLine)];
       if (!url)

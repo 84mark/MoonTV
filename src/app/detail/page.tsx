@@ -9,6 +9,7 @@ import type { DoubanSubject } from '@/lib/douban-comments';
 import { validDoubanId } from '@/lib/douban-comments';
 import type { DoubanSubjectDetail } from '@/lib/douban-subject';
 import { getBuiltinImageProxyUrl } from '@/lib/image-proxy';
+import { kidsLanguage, kidsPlaybackMatches } from '@/lib/kids-resources';
 import { browseReturn } from '@/lib/navigation';
 import type {
   PlaybackPreparation,
@@ -74,6 +75,8 @@ function DetailPageClient() {
           );
           if (response.ok) {
             fallback = await response.json();
+            if (fallback && !kidsPlaybackMatches(params, fallback))
+              fallback = null;
             if (!controller.signal.aborted) setSource(fallback);
           }
         } catch {
@@ -193,6 +196,26 @@ function DetailPageClient() {
             <h1 className='break-words text-3xl font-bold md:text-4xl'>
               {displayTitle}
             </h1>
+            {searchParams.has('kids_id') && (
+              <span
+                aria-label='播放语言'
+                className='mt-3 inline-flex rounded-full bg-sky-100 px-3 py-1 text-sm font-semibold text-sky-700 dark:bg-sky-900/50 dark:text-sky-200'
+              >
+                {(() => {
+                  const language = kidsLanguage(
+                    prepared?.selected ||
+                      source || {
+                        title: '',
+                        language: searchParams.get('kids_language') || '',
+                      }
+                  );
+                  return language.code === 'unknown' ||
+                    language.code.startsWith('multi')
+                    ? language.label
+                    : `${language.label}版`;
+                })()}
+              </span>
+            )}
             <p className='mt-3 text-sm text-gray-500'>
               {[
                 subject?.year || source?.year || year,

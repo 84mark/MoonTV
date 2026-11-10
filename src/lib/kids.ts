@@ -1,5 +1,5 @@
 // Original editorial metadata only. No videos, third-party copy, or artwork are bundled.
-// Age ranges are parent-guided selection suggestions, not official content ratings.
+// Historical age metadata is editorial only; browsing is organized by series and films.
 export const KIDS_AGE_GROUPS = [
   {
     id: '2-4',
@@ -231,12 +231,12 @@ export const KIDS_TITLES: KidsTitle[] = [
     symbol: '🌳',
   },
   {
-    id: 'wonder',
-    name: '奇迹男孩',
+    id: 'toystory',
+    name: '玩具总动员',
     kind: 'movie',
     age: '8-12',
     theme: '朋友合作',
-    description: '建议家长陪同，围绕校园相处、差异与善意展开讨论。',
+    description: '跟着玩具伙伴一起出发，看看友情与合作的力量。',
     symbol: '⭐',
   },
   {
@@ -247,6 +247,132 @@ export const KIDS_TITLES: KidsTitle[] = [
     theme: '成长冒险',
     description: '以冒险故事讨论偏见、努力与合作，含追逐紧张情节。',
     symbol: '🦊',
+  },
+  {
+    id: 'frozen',
+    name: '冰雪奇缘',
+    kind: 'movie',
+    age: '8-12',
+    theme: '朋友合作',
+    description: '和姐妹一起走进冰雪王国，听勇气与亲情的故事。',
+    symbol: '❄️',
+  },
+  {
+    id: 'coco',
+    name: '寻梦环游记',
+    kind: 'movie',
+    age: '8-12',
+    theme: '成长冒险',
+    description: '跟随音乐少年寻找梦想，认识家人与回忆的意义。',
+    symbol: '🎸',
+  },
+  {
+    id: 'nemo',
+    name: '海底总动员',
+    kind: 'movie',
+    age: '8-12',
+    theme: '自然科学',
+    description: '游进海底世界，和小丑鱼一起经历寻找与成长。',
+    symbol: '🐠',
+  },
+  {
+    id: 'walle',
+    name: '机器人总动员',
+    kind: 'movie',
+    age: '8-12',
+    theme: '自然科学',
+    description: '认识一位热爱地球的机器人，踏上一场太空冒险。',
+    symbol: '🤖',
+  },
+  {
+    id: 'kungfupanda',
+    name: '功夫熊猫',
+    kind: 'movie',
+    age: '8-12',
+    theme: '成长冒险',
+    description: '和熊猫阿宝一起练习、合作，发现自己的长处。',
+    symbol: '🐼',
+  },
+  {
+    id: 'bighero',
+    name: '超能陆战队',
+    kind: 'movie',
+    age: '8-12',
+    theme: '朋友合作',
+    description: '跟着大白和伙伴们，用发明与合作应对新挑战。',
+    symbol: '🤗',
+  },
+  {
+    id: 'croods',
+    name: '疯狂原始人',
+    kind: 'movie',
+    age: '8-12',
+    theme: '成长冒险',
+    description: '与一家人走出熟悉的山洞，发现一个全新的世界。',
+    symbol: '🌋',
+  },
+  {
+    id: 'boonie',
+    name: '熊出没之夺宝熊兵',
+    kind: 'movie',
+    age: '8-12',
+    theme: '朋友合作',
+    description: '和熊大熊二一起保护新朋友，体验森林里的热闹冒险。',
+    symbol: '🐻',
+  },
+  {
+    id: 'bluey',
+    name: '布鲁伊 第一季',
+    kind: 'tv',
+    age: '5-7',
+    theme: '朋友合作',
+    description: '和一家人一起玩游戏，发现日常生活的小快乐。',
+    symbol: '🐶',
+  },
+  {
+    id: 'pony',
+    name: '小马宝莉：友谊大魔法 第一季',
+    kind: 'tv',
+    age: '5-7',
+    theme: '朋友合作',
+    description: '跟随小马伙伴认识友谊，学习沟通与互相帮助。',
+    symbol: '🦄',
+  },
+  {
+    id: 'thomas',
+    name: '托马斯和他的朋友们 第一季',
+    kind: 'tv',
+    age: '5-7',
+    theme: '朋友合作',
+    description: '和小火车伙伴一起完成任务，认识责任与合作。',
+    symbol: '🚂',
+  },
+  {
+    id: 'bears',
+    name: '熊出没',
+    kind: 'tv',
+    age: '5-7',
+    theme: '成长冒险',
+    description: '和森林伙伴一起经历热闹故事，发现守护自然的意义。',
+    symbol: '🐻',
+  },
+  {
+    id: 'pleasantgoat',
+    name: '喜羊羊与灰太狼',
+    kind: 'tv',
+    age: '5-7',
+    theme: '成长冒险',
+    description: '跟着羊村伙伴们动脑筋，用合作解决冒险中的难题。',
+    symbol: '🐑',
+  },
+  {
+    id: 'doraemon',
+    name: '哆啦A梦',
+    kind: 'tv',
+    age: '5-7',
+    theme: '思维游戏',
+    description: '和来自未来的伙伴一起思考，看看选择带来的不同结果。',
+    symbol: '🤖',
   },
 ];
 export function kidsAgeGroup(value: string | null): KidsAgeGroup {
@@ -278,4 +404,21 @@ export function kidsDetailHref(item: KidsTitle, age: KidsAgeGroup): string {
   });
   if (item.year) params.set('year', item.year);
   return `/detail?${params}`;
+}
+
+export type KidsKind = 'tv' | 'movie';
+export const KIDS_KINDS = [
+  { id: 'tv', label: '动画剧集', symbol: '📺' },
+  { id: 'movie', label: '动画电影', symbol: '🍿' },
+] as const;
+export function kidsKind(value: string | null): KidsKind {
+  return value === 'movie' ? 'movie' : 'tv';
+}
+export function kidsTitlesByKind(kind: KidsKind, query = ''): KidsTitle[] {
+  const text = query.trim().toLowerCase();
+  return KIDS_TITLES.filter(
+    (item) =>
+      item.kind === kind &&
+      `${item.name} ${item.theme}`.toLowerCase().includes(text)
+  );
 }

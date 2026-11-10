@@ -37,6 +37,8 @@ interface VideoCardProps {
   items?: SearchResult[];
   type?: string;
   doubanType?: 'movie' | 'tv';
+  kidsId?: string;
+  kidsLanguage?: string;
 }
 
 export default function VideoCard({
@@ -57,6 +59,8 @@ export default function VideoCard({
   items,
   type = '',
   doubanType,
+  kidsId,
+  kidsLanguage,
 }: VideoCardProps) {
   const router = useRouter();
   const [favorited, setFavorited] = useState(false);
@@ -216,6 +220,13 @@ export default function VideoCard({
     const doubanQuery = /^\d{5,12}$/.test(actualDoubanId)
       ? `&douban_id=${actualDoubanId}&douban_type=${contentKind}`
       : '';
+    const kidsQuery =
+      kidsId && kidsLanguage
+        ? `&${new URLSearchParams({
+            kids_id: kidsId,
+            kids_language: kidsLanguage,
+          })}`
+        : '';
     if (from === 'douban') {
       router.push(
         `/detail?title=${encodeURIComponent(actualTitle.trim())}${
@@ -224,7 +235,7 @@ export default function VideoCard({
           actualSearchType ? `&stype=${actualSearchType}` : ''
         }${doubanQuery}&poster=${encodeURIComponent(
           actualPoster || ''
-        )}${returnQuery}`
+        )}${returnQuery}${kidsQuery}`
       );
     } else if (actualSource && actualId) {
       router.push(
@@ -238,7 +249,7 @@ export default function VideoCard({
           actualSearchType ? `&stype=${actualSearchType}` : ''
         }${doubanQuery}&poster=${encodeURIComponent(
           actualPoster || ''
-        )}${returnQuery}`
+        )}${returnQuery}${kidsQuery}`
       );
     }
   }, [
@@ -255,6 +266,8 @@ export default function VideoCard({
     actualPoster,
     doubanType,
     actualEpisodes,
+    kidsId,
+    kidsLanguage,
   ]);
 
   const config = useMemo(() => {

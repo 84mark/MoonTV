@@ -29,12 +29,13 @@ type HlsInstance = {
 };
 const mockPlayers: Player[] = [];
 const mockHls: HlsInstance[] = [];
+const mockProbe = jest.fn((...args: unknown[]) => {
+  void args;
+  return { ready: new Promise(() => undefined), cancel: jest.fn() };
+});
 
 jest.mock('@/lib/live-probe', () => ({
-  probeLiveSources: () => ({
-    ready: new Promise(() => undefined),
-    cancel: jest.fn(),
-  }),
+  probeLiveSources: (...args: unknown[]) => mockProbe(...args),
 }));
 jest.mock('artplayer', () => ({
   __esModule: true,
@@ -81,6 +82,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   mockPlayers.length = 0;
   mockHls.length = 0;
+  mockProbe.mockClear();
 });
 afterEach(() => {
   // Reset the session sound preference through the real cleanup path.
@@ -170,13 +172,60 @@ it('retains the user sound settings across a channel switch', () => {
   );
 });
 
-it('uses same-origin compatibility for built-in channels and allows direct playback', () => {
+it('starts built-in domestic channels directly and does not infer relay from a failed request', () => {
   render(<LivePlayer channel={{ ...channel, id: 'cn:fixture' }} />);
+  expect(mockProbe.mock.calls[0][0]).toEqual(channel.urls);
   fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
-  expect(mockPlayers[0].options.url).toBe(
-    '/api/live/stream?channel=cn%3Afixture&line=0'
+  expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
+  act(() => mockHls[0].events.error('error', { fatal: true }));
+  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[1]);
+  expect(screen.getByRole('button', { name: '自动选择' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+});
+it('automatically relays only the source explicitly listed as requiring compatibility', () => {
+  render(
+    <LivePlayer
+      channel={{
+        ...channel,
+        id: 'cn:fixture',
+        relayRequired: [channel.urls[1]],
+      }}
+    />
+  );
+  expect(mockProbe.mock.calls[0][0]).toEqual([
+    channel.urls[0],
+    '/api/live/stream?channel=cn%3Afixture&line=1',
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: '线路 2' }));
+  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(
+    '/api/live/stream?channel=cn%3Afixture&line=1'
+  );
+  fireEvent.click(screen.getByRole('button', { name: '线路 1' }));
+  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[0]);
+  fireEvent.click(screen.getByRole('button', { name: '直连播放' }));
+  fireEvent.click(screen.getByRole('button', { name: '线路 2' }));
+  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[1]);
+});
+it('starts world channels directly but permits a manual compatibility selection', () => {
+  render(<LivePlayer channel={{ ...channel, id: 'world:fixture' }} />);
+  fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
+  expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
+  fireEvent.click(screen.getByRole('button', { name: '兼容播放' }));
+  fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
+  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(
+    '/api/live/stream?channel=world%3Afixture&line=0'
   );
   fireEvent.click(screen.getByRole('button', { name: '直连播放' }));
   fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
   expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[0]);
+});
+it('never relays user-imported channels even if imported data contains a relay marker', () => {
+  render(<LivePlayer channel={{ ...channel, relayRequired: channel.urls }} />);
+  expect(mockProbe.mock.calls[0][0]).toEqual(channel.urls);
+  expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
+  expect(
+    screen.queryByRole('button', { name: '兼容播放' })
+  ).not.toBeInTheDocument();
 });

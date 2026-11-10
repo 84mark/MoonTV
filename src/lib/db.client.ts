@@ -41,6 +41,8 @@ export interface PlayRecord {
   total_time: number; // 总进度（秒）
   save_time: number; // 记录保存时间（时间戳）
   search_title?: string; // 搜索时使用的标题
+  kids_id?: string;
+  kids_language?: string;
 }
 
 // ---- 收藏类型 ----
