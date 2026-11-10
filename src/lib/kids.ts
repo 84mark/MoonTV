@@ -1,4 +1,7 @@
-// Original editorial metadata only. No videos, third-party copy, or artwork are bundled.
+import movieCatalog from './kids-movie-catalog.json';
+
+// Editorial selections with attributed title/release facts; no videos,
+// third-party synopses or artwork are bundled.
 // Historical age metadata is editorial only; browsing is organized by series and films.
 export const KIDS_AGE_GROUPS = [
   {
@@ -30,8 +33,16 @@ export interface KidsTitle {
   description: string;
   symbol: string;
   year?: string;
+  aliases?: string[];
+  releaseYears?: string[];
+  catalogSource?: {
+    provider: 'bangumi';
+    id: number;
+    url: string;
+    snapshot: string;
+  };
 }
-export const KIDS_TITLES: KidsTitle[] = [
+const ORIGINAL_KIDS_TITLES: KidsTitle[] = [
   {
     id: 'peppa',
     name: '小猪佩奇 第一季',
@@ -375,6 +386,46 @@ export const KIDS_TITLES: KidsTitle[] = [
     symbol: '🤖',
   },
 ];
+// Names, aliases and release facts were checked against this dated public archive.
+// Selection and descriptions are editorial; the archive is not an age rating or video source.
+export const KIDS_CATALOG_SNAPSHOT = '2026-11-03';
+export const KIDS_CATALOG_SOURCE =
+  'https://github.com/bangumi/Archive/releases/tag/archive';
+const movieEntries: KidsTitle[] = movieCatalog.map((item) => ({
+  id: item.id,
+  name: item.name,
+  year: item.year,
+  aliases: item.aliases,
+  kind: 'movie',
+  age: '8-12',
+  theme: '成长冒险',
+  description: '一起欣赏动画故事，聊聊角色的选择、成长与合作。',
+  symbol: '🎬',
+  catalogSource: {
+    provider: 'bangumi',
+    id: item.bangumiId,
+    url: `https://bgm.tv/subject/${item.bangumiId}`,
+    snapshot: KIDS_CATALOG_SNAPSHOT,
+  },
+  // Regional premieres and restored editions have multiple legitimate source years.
+  ...(item.bangumiId === 1962
+    ? { releaseYears: ['1961', '1964', '1978', '2017'] }
+    : item.bangumiId === 36186
+    ? { releaseYears: ['1983', '2021'] }
+    : item.bangumiId === 119356
+    ? { releaseYears: ['2014', '2015', '2016'] }
+    : {}),
+}));
+export const KIDS_TITLES: KidsTitle[] = [
+  ...ORIGINAL_KIDS_TITLES.map((item) => {
+    const movie = movieEntries.find((entry) => entry.id === item.id);
+    return movie ? { ...movie, ...item } : item;
+  }),
+  ...movieEntries.filter(
+    (item) => !ORIGINAL_KIDS_TITLES.some((entry) => entry.id === item.id)
+  ),
+];
+
 export function kidsAgeGroup(value: string | null): KidsAgeGroup {
   return KIDS_AGE_GROUPS.some((group) => group.id === value)
     ? (value as KidsAgeGroup)
@@ -390,7 +441,9 @@ export function filterKidsTitles(
     (item) =>
       item.age === age &&
       (theme === '全部' || item.theme === theme) &&
-      `${item.name} ${item.theme} ${item.description}`
+      `${item.name} ${(item.aliases || []).join(' ')} ${item.theme} ${
+        item.description
+      }`
         .toLowerCase()
         .includes(search)
   );
@@ -419,6 +472,8 @@ export function kidsTitlesByKind(kind: KidsKind, query = ''): KidsTitle[] {
   return KIDS_TITLES.filter(
     (item) =>
       item.kind === kind &&
-      `${item.name} ${item.theme}`.toLowerCase().includes(text)
+      `${item.name} ${(item.aliases || []).join(' ')} ${item.theme}`
+        .toLowerCase()
+        .includes(text)
   );
 }

@@ -4,6 +4,10 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 
 import type { SourceHealth } from '@/lib/source-network';
 import {
+  ANIMATION_SOURCE_CANDIDATES,
+  missingAnimationSources,
+} from '@/lib/source-recommendations';
+import {
   mergeSources,
   normalizeSources,
   parseSourceImport,
@@ -120,6 +124,7 @@ function SourcesPageClient() {
   }
 
   async function checkMany(list: VideoSource[]) {
+    const checked: Record<string, SourceHealth> = {};
     setChecking(true);
     const controller = new AbortController();
     checkController.current = controller;
@@ -136,6 +141,7 @@ function SourcesPageClient() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ source }),
           });
+          checked[source.key] = result;
           setHealth((previous) => ({ ...previous, [source.key]: result }));
         } catch (error) {
           if (controller.signal.aborted) return;
@@ -157,6 +163,27 @@ function SourcesPageClient() {
     } finally {
       setChecking(false);
     }
+    return checked;
+  }
+
+  async function previewAnimationSources() {
+    const candidates = missingAnimationSources(sources);
+    setPending(candidates);
+    if (!candidates.length) {
+      setMessage('补充源已在当前列表中，保留原有地址和开关。');
+      return;
+    }
+    setMessage('正在检测补充源接口，尚未修改共享配置。');
+    const results = await checkMany(candidates);
+    setPending(
+      candidates.map((source) => ({
+        ...source,
+        disabled: results[source.key]?.status !== 'ok',
+      }))
+    );
+    setMessage(
+      '检测完成：接口正常的源已在预览中启用，其余保持禁用。合并后保存到所有设备；具体影片仍需播放验证。'
+    );
   }
 
   async function importRemote() {
@@ -396,10 +423,7 @@ function SourcesPageClient() {
         {writable && (
           <fieldset disabled={saving || checking} className='space-y-6'>
             <legend className='sr-only'>编辑共享视频源</legend>
-            <form
-              onSubmit={addOrEdit}
-              className='glass-panel p-5 space-y-3'
-            >
+            <form onSubmit={addOrEdit} className='glass-panel p-5 space-y-3'>
               <h2 className='font-semibold'>
                 {editing ? '编辑视频源' : '添加视频源'}
               </h2>
@@ -481,6 +505,33 @@ function SourcesPageClient() {
               <p className='text-sm text-gray-500'>
                 以下是第三方维护的源列表，更新状态和地区可用性不由本站保证。读取后先预览、检测，再保存；不会后台自动替换你的配置。
               </p>
+              <div className='space-y-2 rounded border border-gray-200 p-3 dark:border-gray-700'>
+                <h3 className='font-medium'>动画补充源</h3>
+                <p className='text-sm text-gray-500'>
+                  从 Miru
+                  项目整理的兼容接口，可补充动画搜索。只导入接口地址，不运行第三方扩展；接口检测不代表影片可播放。
+                </p>
+                <div className='flex flex-wrap gap-3 text-sm'>
+                  {ANIMATION_SOURCE_CANDIDATES.map(({ source, provenance }) => (
+                    <a
+                      key={source.key}
+                      href={provenance}
+                      target='_blank'
+                      rel='noreferrer'
+                      className='text-blue-600 underline'
+                    >
+                      {source.name} · GitHub 出处
+                    </a>
+                  ))}
+                </div>
+                <button
+                  className={buttonClass}
+                  disabled={importing || checking}
+                  onClick={() => void previewAnimationSources()}
+                >
+                  检测并预览动画补充源
+                </button>
+              </div>
               {SOURCE_CATALOGS.map((catalog) => (
                 <div
                   key={catalog.url}
@@ -563,7 +614,13 @@ function SourcesPageClient() {
                   <ul className='max-h-48 overflow-auto text-xs space-y-1'>
                     {pending.map((source) => (
                       <li key={source.key}>
-                        {source.name} · {source.api}
+                        {source.name} · {source.api} ·{' '}
+                        {source.disabled ? '禁用' : '启用'}
+                        {health[source.key] && (
+                          <span className='block'>
+                            {health[source.key].message}
+                          </span>
+                        )}
                       </li>
                     ))}
                   </ul>

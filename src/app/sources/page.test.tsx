@@ -24,18 +24,16 @@ const response = (data: unknown, ok = true) => ({
 
 beforeEach(() => {
   global.fetch = fetchMock;
-  fetchMock
-    .mockReset()
-    .mockResolvedValue(
-      response({
-        sources: [source],
-        defaults: [source],
-        revision: 1,
-        canManage: true,
-        configured: true,
-        sharedPasswordAccess: true,
-      })
-    );
+  fetchMock.mockReset().mockResolvedValue(
+    response({
+      sources: [source],
+      defaults: [source],
+      revision: 1,
+      canManage: true,
+      configured: true,
+      sharedPasswordAccess: true,
+    })
+  );
 });
 afterAll(() => {
   global.fetch = originalFetch;
@@ -96,4 +94,41 @@ it('previews imported JSON before changing any existing source', async () => {
   fireEvent.click(screen.getByText('合并到草稿（保留现有开关）'));
   expect(screen.getByLabelText('启用 导入源')).toBeChecked();
   expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it('checks supplementary sources before previewing and keeps failed sources disabled', async () => {
+  render(<SourcesPage />);
+  await screen.findByText('原有源');
+  fetchMock.mockImplementation(async (url, init) => {
+    if (url === '/api/sources/check') {
+      const candidate = JSON.parse(init.body).source;
+      return response({
+        status: candidate.key === 'miru-subo' ? 'ok' : 'timeout',
+        message: candidate.key === 'miru-subo' ? '接口正常' : '检测超时',
+        latencyMs: 20,
+      });
+    }
+    return response({ ok: true, revision: 2 });
+  });
+  fireEvent.click(screen.getByText('检测并预览动画补充源'));
+  await screen.findByText(/检测完成：接口正常的源/);
+  expect(screen.queryByLabelText('启用 速播资源')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('合并到草稿（保留现有开关）'));
+  expect(screen.getByLabelText('启用 原有源')).toBeChecked();
+  expect(screen.getByLabelText('启用 速播资源')).toBeChecked();
+  expect(screen.getByLabelText('启用 天空资源')).not.toBeChecked();
+  expect(screen.getByLabelText('启用 优质资源')).not.toBeChecked();
+  expect(
+    fetchMock.mock.calls.some(
+      ([url, init]) => url === '/api/sources' && init?.method === 'PUT'
+    )
+  ).toBe(false);
+  fireEvent.click(screen.getByText('保存到所有设备'));
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => url === '/api/sources' && init?.method === 'PUT'
+      )
+    ).toBe(true)
+  );
 });

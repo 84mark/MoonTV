@@ -153,3 +153,59 @@ it('treats malformed upstream language metadata as unconfirmed instead of throwi
     kidsLanguage({ ...result('动画'), language: [] as unknown as string })
   ).toEqual({ code: 'unknown', label: '语言待确认' });
 });
+
+it('matches approved movie aliases without admitting sequels or live-action remakes', () => {
+  const movie = KIDS_TITLES.find((title) => title.id === 'toystory');
+  if (!movie) throw new Error('Missing original movie');
+  const sequel = KIDS_TITLES.find((title) => title.name === '玩具总动员2');
+  if (!sequel) throw new Error('Missing sequel');
+  const original = { ...result('反斗奇兵 英语版'), year: '1995' };
+  expect(matchesKidsTitle(movie, original)).toBe(true);
+  expect(matchesKidsTitle(sequel, original)).toBe(false);
+  expect(matchesKidsTitle(movie, { ...result('玩具总动员2'), year: '' })).toBe(
+    false
+  );
+  expect(
+    matchesKidsTitle(movie, { ...result('玩具总动员第二部'), year: '' })
+  ).toBe(false);
+  const dragon = KIDS_TITLES.find((title) => title.name === '驯龙高手');
+  if (!dragon) throw new Error('Missing dragon movie');
+  expect(
+    matchesKidsTitle(dragon, { ...result('驯龙高手'), year: '2010' })
+  ).toBe(true);
+  expect(
+    matchesKidsTitle(dragon, { ...result('驯龙高手'), year: '2025' })
+  ).toBe(false);
+  const params = new URLSearchParams({
+    kids_id: movie.id,
+    kids_language: 'en',
+    title: '反斗奇兵 英语版',
+    year: '1995',
+  });
+  expect(
+    kidsPlaybackMatches(params, {
+      ...result('Toy Story', '英语'),
+      year: '1995',
+    })
+  ).toBe(true);
+  expect(
+    kidsPlaybackMatches(params, {
+      ...result('Toy Story 2', '英语'),
+      year: '1999',
+    })
+  ).toBe(false);
+});
+
+it('accepts explicitly recorded alternate release years for restored editions', () => {
+  const movie = KIDS_TITLES.find((title) => title.name === '天书奇谭');
+  if (!movie) throw new Error('Missing restored movie');
+  expect(matchesKidsTitle(movie, { ...result(movie.name), year: '1983' })).toBe(
+    true
+  );
+  expect(matchesKidsTitle(movie, { ...result(movie.name), year: '2021' })).toBe(
+    true
+  );
+  expect(matchesKidsTitle(movie, { ...result(movie.name), year: '2020' })).toBe(
+    false
+  );
+});

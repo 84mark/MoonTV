@@ -68,7 +68,9 @@ function KidsPageClient() {
       titleSeeds.filter(
         (item) =>
           (theme === '全部' || item.theme === theme) &&
-          `${item.name} ${item.id} ${item.description} ${item.theme} ${
+          `${item.name} ${(item.aliases || []).join(' ')} ${item.id} ${
+            item.description
+          } ${item.theme} ${
             pools[item.id]?.variants
               .map((variant) => variant.title)
               .join(' ') || ''

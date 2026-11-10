@@ -64,11 +64,14 @@ export function kidsLanguage(
   if (hits.length === 1) return { code: hits[0][0], label: hits[0][1] };
   return { code: 'unknown', label: '语言待确认' };
 }
-function strippedTitle(title: string) {
-  return withoutSubtitleLabels(title)
-    .normalize('NFKC')
-    .replace(/第[一二三四五六七八九十百零〇两\d]+[季部辑]/g, '')
-    .replace(/(?:season|\bs)\s*\d+/gi, '')
+function strippedTitle(title: string, stripSeason = true) {
+  const normalized = withoutSubtitleLabels(title).normalize('NFKC');
+  const base = stripSeason
+    ? normalized
+        .replace(/第[一二三四五六七八九十百零〇两\d]+[季部辑]/g, '')
+        .replace(/(?:season|\bs)\s*\d+/gi, '')
+    : normalized;
+  return base
     .replace(
       /(?:普通话|国语|英语|英文|粤语|日语|日文|韩语|中文|汉语|双语|多语)(?:版|配音)?/g,
       ''
@@ -115,7 +118,20 @@ export function matchesKidsTitle(
     (item.kind === 'movie' && tv)
   )
     return false;
-  return kidsFamilyTitle(item.name) === kidsFamilyTitle(source.title);
+  // Preserve sequel identity; aliases are exact approved titles, never prefix matches.
+  // A known different year must not turn an animated pick into a live-action remake.
+  if (
+    item.kind === 'movie' &&
+    item.year &&
+    /^\d{4}$/.test(source.year || '') &&
+    !(item.releaseYears || [item.year]).includes(source.year)
+  )
+    return false;
+  const stripSeason = item.kind === 'tv';
+  const title = strippedTitle(source.title, stripSeason);
+  return [item.name, ...(item.aliases || [])].some(
+    (name) => strippedTitle(name, stripSeason) === title
+  );
 }
 function ordinal(value: string): string {
   if (/^\d+$/.test(value)) return String(Number(value));

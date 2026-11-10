@@ -44,7 +44,7 @@ it('rejects arbitrary search queries outside the curated resource pool', async (
   expect(mockGetConfig).not.toHaveBeenCalled();
   expect(mockSearchFromApi).not.toHaveBeenCalled();
 });
-it('searches enabled sources once with page limit and returns language variants with real posters', async () => {
+it('searches enabled sources with two-page limit and returns language variants with real posters', async () => {
   mockGetConfig.mockResolvedValue({
     SourceConfig: [...sites, { ...sites[0], key: 'disabled', disabled: true }],
   });
@@ -65,7 +65,8 @@ it('searches enabled sources once with page limit and returns language variants 
   expect(mockSearchFromApi).toHaveBeenCalledWith(
     sites[0],
     expect.any(String),
-    1
+    2,
+    expect.any(AbortSignal)
   );
   expect(data.variants[0].poster).toBe('https://example.com/poster.jpg');
 });
@@ -113,8 +114,8 @@ it('retains prior resources on an empty update and retries stale results only af
   await GET(request());
   expect(mockSearchFromApi).toHaveBeenCalledTimes(calls + 2);
 });
-it('caps the source fanout at eight and keeps at most four searches active', async () => {
-  const many = Array.from({ length: 12 }, (_, i) => ({
+it('caps the source fanout at twelve and keeps at most four searches active', async () => {
+  const many = Array.from({ length: 20 }, (_, i) => ({
     ...sites[0],
     key: String(i),
   }));
@@ -130,7 +131,79 @@ it('caps the source fanout at eight and keeps at most four searches active', asy
   });
   const { GET } = loadRoute();
   const data = await (await GET(request())).json();
-  expect(mockSearchFromApi).toHaveBeenCalledTimes(8);
+  expect(mockSearchFromApi).toHaveBeenCalledTimes(12);
   expect(peak).toBeLessThanOrEqual(4);
   expect(data.hasMoreSources).toBe(true);
+});
+
+it('rotates discovery across the full catalog and retains sources outside the refreshed window', async () => {
+  let now = 1000000;
+  jest.spyOn(Date, 'now').mockImplementation(() => now);
+  const many = Array.from({ length: 20 }, (_, i) => ({
+    ...sites[0],
+    key: String(i),
+  }));
+  mockGetConfig.mockResolvedValue({ SourceConfig: many });
+  const { GET } = loadRoute();
+  await GET(request());
+  expect(
+    new Set(mockSearchFromApi.mock.calls.map(([site]) => site.key)).size
+  ).toBe(12);
+  now += 10 * 60 * 1000 + 1;
+  const data = await (await GET(request())).json();
+  expect(
+    new Set(mockSearchFromApi.mock.calls.map(([site]) => site.key)).size
+  ).toBe(20);
+  expect(data.variants[0].sources).toHaveLength(20);
+});
+
+it('tries aliases only for sources without a matching title and stays within the request budget', async () => {
+  jest.doMock('@/lib/kids', () => ({
+    KIDS_TITLES: [{ ...item, aliases: ['Peppa Pig', '粉红猪小妹'] }],
+  }));
+  try {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      ...sites[0],
+      key: String(i),
+    }));
+    mockGetConfig.mockResolvedValue({ SourceConfig: many });
+    mockSearchFromApi.mockImplementation(async (site, query) =>
+      query === 'Peppa Pig' ? [source(site)] : []
+    );
+    const { GET } = loadRoute();
+    const data = await (await GET(request())).json();
+    expect(mockSearchFromApi).toHaveBeenCalledTimes(16);
+    expect(
+      mockSearchFromApi.mock.calls
+        .slice(0, 12)
+        .every(([, query]) => query !== 'Peppa Pig')
+    ).toBe(true);
+    expect(
+      mockSearchFromApi.mock.calls
+        .slice(12)
+        .every(([, query, pages]) => query === 'Peppa Pig' && pages === 2)
+    ).toBe(true);
+    expect(data.variants[0].sources).toHaveLength(4);
+  } finally {
+    jest.dontMock('@/lib/kids');
+  }
+});
+
+it('stops starting searches after the overall discovery deadline', async () => {
+  let now = 1000000;
+  jest.spyOn(Date, 'now').mockImplementation(() => now);
+  const many = Array.from({ length: 20 }, (_, i) => ({
+    ...sites[0],
+    key: String(i),
+  }));
+  mockGetConfig.mockResolvedValue({ SourceConfig: many });
+  mockSearchFromApi.mockImplementation(async () => {
+    now += 20001;
+    return [];
+  });
+  const { GET } = loadRoute();
+  const data = await (await GET(request())).json();
+  expect(data.sourceCount).toBe(1);
+  expect(mockSearchFromApi).toHaveBeenCalledTimes(1);
+  expect(mockSearchFromApi.mock.calls[0][3].aborted).toBe(true);
 });

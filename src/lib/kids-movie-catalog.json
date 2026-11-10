@@ -1,0 +1,1108 @@
+[
+  {
+    "id": "insideout",
+    "name": "头脑特工队",
+    "year": "2015",
+    "bangumiId": 119035,
+    "aliases": [
+      "头脑大作战",
+      "脑筋急转弯",
+      "玩转脑朋友",
+      "インサイド・ヘッド",
+      "Inside Out"
+    ]
+  },
+  {
+    "id": "bgm-400730",
+    "name": "头脑特工队2",
+    "year": "2024",
+    "bangumiId": 400730,
+    "aliases": ["Inside Out 2"]
+  },
+  {
+    "id": "totoro",
+    "name": "龙猫",
+    "year": "1988",
+    "bangumiId": 302,
+    "aliases": [
+      "Tonari no Totoro",
+      "My Neighbor Totoro",
+      "托托羅",
+      "邻居托托罗",
+      "となりのトトロ"
+    ]
+  },
+  {
+    "id": "toystory",
+    "name": "玩具总动员",
+    "year": "1995",
+    "bangumiId": 6649,
+    "aliases": ["玩具的故事", "反斗奇兵", "Toy Story"]
+  },
+  {
+    "id": "bgm-6650",
+    "name": "玩具总动员2",
+    "year": "1999",
+    "bangumiId": 6650,
+    "aliases": ["玩具的故事2", "反斗奇兵2", "Toy Story 2"]
+  },
+  {
+    "id": "bgm-6651",
+    "name": "玩具总动员3",
+    "year": "2010",
+    "bangumiId": 6651,
+    "aliases": ["玩具的故事3", "反斗奇兵3", "Toy Story 3"]
+  },
+  {
+    "id": "bgm-117148",
+    "name": "玩具总动员4",
+    "year": "2019",
+    "bangumiId": 117148,
+    "aliases": ["反斗奇兵4", "Toy Story 4"]
+  },
+  {
+    "id": "zootopia",
+    "name": "疯狂动物城",
+    "year": "2016",
+    "bangumiId": 133860,
+    "aliases": [
+      "动物方城市",
+      "優獸大都會",
+      "Zootropolis",
+      "动物大都会",
+      "动物乌托邦",
+      "Zootopia"
+    ]
+  },
+  {
+    "id": "frozen",
+    "name": "冰雪奇缘",
+    "year": "2013",
+    "bangumiId": 93044,
+    "aliases": ["Frozen"]
+  },
+  {
+    "id": "bgm-128131",
+    "name": "冰雪奇缘2",
+    "year": "2019",
+    "bangumiId": 128131,
+    "aliases": ["魔雪奇缘2", "Frozen 2", "Frozen II"]
+  },
+  {
+    "id": "coco",
+    "name": "寻梦环游记",
+    "year": "2017",
+    "bangumiId": 209925,
+    "aliases": [
+      "リメンバー・ミー",
+      "可可人生奇遇",
+      "玩轉極樂園",
+      "可可夜总会",
+      "Coco"
+    ]
+  },
+  {
+    "id": "nemo",
+    "name": "海底总动员",
+    "year": "2003",
+    "bangumiId": 25075,
+    "aliases": [
+      "Finding Nemo 3D",
+      "海底总动员3D",
+      "寻找尼莫",
+      "海底奇兵",
+      "Finding Nemo"
+    ]
+  },
+  {
+    "id": "bgm-131779",
+    "name": "海底总动员2：多莉去哪儿",
+    "year": "2016",
+    "bangumiId": 131779,
+    "aliases": ["海底总动员2：寻找多莉", "海底奇兵2", "Finding Dory"]
+  },
+  {
+    "id": "walle",
+    "name": "机器人总动员",
+    "year": "2008",
+    "bangumiId": 1104,
+    "aliases": ["WALL-E", "太空奇兵·威E", "瓦力", "ウォーリー", "Wall·E"]
+  },
+  {
+    "id": "kungfupanda",
+    "name": "功夫熊猫",
+    "year": "2008",
+    "bangumiId": 35814,
+    "aliases": ["熊猫阿宝", "Kung Fu Panda"]
+  },
+  {
+    "id": "bgm-18580",
+    "name": "功夫熊猫2",
+    "year": "2011",
+    "bangumiId": 18580,
+    "aliases": ["Kung Fu Panda 2"]
+  },
+  {
+    "id": "bgm-115615",
+    "name": "功夫熊猫3",
+    "year": "2016",
+    "bangumiId": 115615,
+    "aliases": ["熊猫阿宝3", "阿宝正传3", "Kung Fu Panda 3"]
+  },
+  {
+    "id": "bgm-395881",
+    "name": "功夫熊猫4",
+    "year": "2024",
+    "bangumiId": 395881,
+    "aliases": ["Kung Fu Panda 4"]
+  },
+  {
+    "id": "bighero",
+    "name": "超能陆战队",
+    "year": "2014",
+    "bangumiId": 111097,
+    "aliases": [
+      "ベイマックス",
+      "大英雄天团",
+      "大英雄联盟",
+      "六大英雄",
+      "Big Hero 6"
+    ]
+  },
+  {
+    "id": "croods",
+    "name": "疯狂原始人",
+    "year": "2013",
+    "bangumiId": 71594,
+    "aliases": ["疯狂家族", "克鲁德一家", "The Croods"]
+  },
+  {
+    "id": "bgm-226193",
+    "name": "疯狂原始人2",
+    "year": "2020",
+    "bangumiId": 226193,
+    "aliases": [
+      "The Croods 2",
+      "疯狂原始人2：新纪元",
+      "古鲁家族：新石代",
+      "古鲁家族2：霸器新時代",
+      "The Croods: A New Age"
+    ]
+  },
+  {
+    "id": "boonie",
+    "name": "熊出没之夺宝熊兵",
+    "year": "2014",
+    "bangumiId": 95780,
+    "aliases": ["Boonie Bears: To the Rescue"]
+  },
+  {
+    "id": "bgm-117149",
+    "name": "熊出没之雪岭熊风",
+    "year": "2015",
+    "bangumiId": 117149,
+    "aliases": ["Boonie Bears: Mystical Winter", "熊出没大电影2"]
+  },
+  {
+    "id": "bgm-161058",
+    "name": "熊出没之熊心归来",
+    "year": "2016",
+    "bangumiId": 161058,
+    "aliases": ["熊出没大电影3", "Boonie Bears III"]
+  },
+  {
+    "id": "bgm-203664",
+    "name": "熊出没·奇幻空间",
+    "year": "2017",
+    "bangumiId": 203664,
+    "aliases": ["Entangled Worlds"]
+  },
+  {
+    "id": "bgm-229382",
+    "name": "熊出没·变形记",
+    "year": "2018",
+    "bangumiId": 229382,
+    "aliases": ["熊出没5", "熊出没大电影5"]
+  },
+  {
+    "id": "bgm-269236",
+    "name": "熊出没·原始时代",
+    "year": "2019",
+    "bangumiId": 269236,
+    "aliases": ["Boonie Bears:Blast Into The Past"]
+  },
+  {
+    "id": "bgm-328074",
+    "name": "熊出没·狂野大陆",
+    "year": "2021",
+    "bangumiId": 328074,
+    "aliases": ["Boonie Bears: The Wild Life", "熊出没之狂野大陆"]
+  },
+  {
+    "id": "bgm-332365",
+    "name": "熊出没·重返地球",
+    "year": "2022",
+    "bangumiId": 332365,
+    "aliases": ["熊出没 重返地球", "Boonie Bears: Back To Earth"]
+  },
+  {
+    "id": "bgm-400129",
+    "name": "熊出没·伴我“熊芯”",
+    "year": "2023",
+    "bangumiId": 400129,
+    "aliases": ["熊出没之伴我熊芯", "Boonie Bears: Guardian Code"]
+  },
+  {
+    "id": "bgm-440068",
+    "name": "熊出没·逆转时空",
+    "year": "2024",
+    "bangumiId": 440068,
+    "aliases": ["熊出没之逆转时空", "Boonie Bears: Time Twist"]
+  },
+  {
+    "id": "bgm-363854",
+    "name": "汪汪队立大功大电影",
+    "year": "2021",
+    "bangumiId": 363854,
+    "aliases": ["Paw Patrol: The Movie"]
+  },
+  {
+    "id": "bgm-441028",
+    "name": "汪汪队立大功大电影2：超能大冒险",
+    "year": "2023",
+    "bangumiId": 441028,
+    "aliases": ["汪汪隊立大功：超班大電影", "PAW Patrol: The Mighty Movie"]
+  },
+  {
+    "id": "bgm-13134",
+    "name": "喜羊羊与灰太狼之牛气冲天",
+    "year": "2009",
+    "bangumiId": 13134,
+    "aliases": ["The Super Adventure"]
+  },
+  {
+    "id": "bgm-4200",
+    "name": "喜羊羊与灰太狼之虎虎生威",
+    "year": "2010",
+    "bangumiId": 4200,
+    "aliases": [
+      "Pleasant Goat and Big Big Wolf Full of vigor",
+      "喜羊羊与灰太狼之虎胆羊威"
+    ]
+  },
+  {
+    "id": "bgm-13135",
+    "name": "喜羊羊与灰太狼之兔年顶呱呱",
+    "year": "2011",
+    "bangumiId": 13135,
+    "aliases": []
+  },
+  {
+    "id": "bgm-37164",
+    "name": "喜羊羊与灰太狼之开心闯龙年",
+    "year": "2012",
+    "bangumiId": 37164,
+    "aliases": [
+      "Pleasant Goat & Big Big Wolf 4 Mission Incredible : Adventure on The dragon’s Trail"
+    ]
+  },
+  {
+    "id": "bgm-57755",
+    "name": "喜羊羊与灰太狼之喜气羊羊过蛇年",
+    "year": "2013",
+    "bangumiId": 57755,
+    "aliases": [
+      "Pleasant Goat And Big Big Wolf — The Mythical Ark: Adventures in Love & Happiness",
+      "喜羊羊与灰太狼大电影5：喜气羊羊过蛇年"
+    ]
+  },
+  {
+    "id": "bgm-90349",
+    "name": "喜羊羊与灰太狼之飞马奇遇记",
+    "year": "2014",
+    "bangumiId": 90349,
+    "aliases": []
+  },
+  {
+    "id": "bgm-124630",
+    "name": "喜羊羊与灰太狼之羊年喜羊羊",
+    "year": "2015",
+    "bangumiId": 124630,
+    "aliases": [
+      "Pleasant Goat and Big Big Wolf – Amazing Pleasant Goat",
+      "喜羊羊与灰太狼大电影7：羊年喜羊羊"
+    ]
+  },
+  {
+    "id": "bgm-350880",
+    "name": "喜羊羊与灰太狼之筐出未来",
+    "year": "2022",
+    "bangumiId": 350880,
+    "aliases": ["Pleasant Goat and Big Big Wolf — Dunk for Future"]
+  },
+  {
+    "id": "bgm-454783",
+    "name": "喜羊羊与灰太狼之守护",
+    "year": "2024",
+    "bangumiId": 454783,
+    "aliases": []
+  },
+  {
+    "id": "bgm-13295",
+    "name": "驯龙高手",
+    "year": "2010",
+    "bangumiId": 13295,
+    "aliases": ["驯龙记", "How to Train Your Dragon"]
+  },
+  {
+    "id": "bgm-95796",
+    "name": "驯龙高手2",
+    "year": "2014",
+    "bangumiId": 95796,
+    "aliases": ["驯龙记2", "How to Train Your Dragon 2"]
+  },
+  {
+    "id": "bgm-25076",
+    "name": "怪兽电力公司",
+    "year": "2001",
+    "bangumiId": 25076,
+    "aliases": ["怪物公司", "怪兽公司", "Monsters, Inc."]
+  },
+  {
+    "id": "bgm-77647",
+    "name": "怪兽大学",
+    "year": "2013",
+    "bangumiId": 77647,
+    "aliases": ["Monsters University"]
+  },
+  {
+    "id": "bgm-11602",
+    "name": "飞屋环游记",
+    "year": "2009",
+    "bangumiId": 11602,
+    "aliases": ["飞屋历险记", "沖天救兵", "天外奇蹟", "UP"]
+  },
+  {
+    "id": "bgm-46117",
+    "name": "虫虫危机",
+    "year": "1998",
+    "bangumiId": 46117,
+    "aliases": ["虫虫特工队", "A Bug's Life"]
+  },
+  {
+    "id": "bgm-533",
+    "name": "美食总动员",
+    "year": "2007",
+    "bangumiId": 533,
+    "aliases": ["料理鼠王", "Ratatouille"]
+  },
+  {
+    "id": "bgm-46116",
+    "name": "超人总动员",
+    "year": "2004",
+    "bangumiId": 46116,
+    "aliases": ["超人特攻队", "超人家族", "超人特工队", "The Incredibles"]
+  },
+  {
+    "id": "bgm-237446",
+    "name": "超人总动员2",
+    "year": "2018",
+    "bangumiId": 237446,
+    "aliases": ["The Incredibles 2"]
+  },
+  {
+    "id": "bgm-329165",
+    "name": "夏日友晴天",
+    "year": "2021",
+    "bangumiId": 329165,
+    "aliases": ["盛夏友晴天", "路卡的夏天", "卢卡", "Luca"]
+  },
+  {
+    "id": "bgm-341938",
+    "name": "青春变形记",
+    "year": "2022",
+    "bangumiId": 341938,
+    "aliases": ["熊抱青春记", "变红", "私ときどきレッサーパンダ", "Turning Red"]
+  },
+  {
+    "id": "bgm-285074",
+    "name": "心灵奇旅",
+    "year": "2020",
+    "bangumiId": 285074,
+    "aliases": ["ソウル", "靈魂急轉彎", "灵魂奇遇记", "Soul"]
+  },
+  {
+    "id": "bgm-400727",
+    "name": "疯狂元素城",
+    "year": "2023",
+    "bangumiId": 400727,
+    "aliases": ["元素方城市", "元素世界", "Elemental"]
+  },
+  {
+    "id": "bgm-42850",
+    "name": "勇敢传说",
+    "year": "2012",
+    "bangumiId": 42850,
+    "aliases": ["勇敢传说之幻险森林", "Brave"]
+  },
+  {
+    "id": "bgm-133858",
+    "name": "恐龙当家",
+    "year": "2015",
+    "bangumiId": 133858,
+    "aliases": [
+      "恐龙管家",
+      "恐龙与男孩",
+      "善良的恐龙",
+      "美好的恐龙世界",
+      "好恐龙",
+      "The Good Dinosaur"
+    ]
+  },
+  {
+    "id": "bgm-283564",
+    "name": "1/2的魔法",
+    "year": "2020",
+    "bangumiId": 283564,
+    "aliases": ["½的魔法", "魔法环游记", "觅法奇程", "Onward"]
+  },
+  {
+    "id": "bgm-130098",
+    "name": "海洋奇缘",
+    "year": "2016",
+    "bangumiId": 130098,
+    "aliases": ["慕安娜", "魔海奇緣", "莫阿娜", "摩阿娜", "Moana"]
+  },
+  {
+    "id": "bgm-479822",
+    "name": "海洋奇缘2",
+    "year": "2024",
+    "bangumiId": 479822,
+    "aliases": ["Moana 2"]
+  },
+  {
+    "id": "bgm-363850",
+    "name": "魔法满屋",
+    "year": "2021",
+    "bangumiId": 363850,
+    "aliases": ["奇幻魔法屋", "Encanto"]
+  },
+  {
+    "id": "bgm-13097",
+    "name": "魔发奇缘",
+    "year": "2010",
+    "bangumiId": 13097,
+    "aliases": ["塔の上のラプンツェル", "长发公主", "Tangled"]
+  },
+  {
+    "id": "bgm-50658",
+    "name": "无敌破坏王",
+    "year": "2012",
+    "bangumiId": 50658,
+    "aliases": ["破坏王拉尔夫", "破坏王大冒险", "Wreck-It Ralph"]
+  },
+  {
+    "id": "bgm-216525",
+    "name": "无敌破坏王2：大闹互联网",
+    "year": "2018",
+    "bangumiId": 216525,
+    "aliases": ["无敌破坏王2", "Wreck-It Ralph 2", "Ralph Breaks the Internet"]
+  },
+  {
+    "id": "bgm-46124",
+    "name": "闪电狗",
+    "year": "2008",
+    "bangumiId": 46124,
+    "aliases": ["明星狗", "超级零零狗3D", "雷霆战狗", "Bolt"]
+  },
+  {
+    "id": "bgm-66253",
+    "name": "拜见罗宾逊一家",
+    "year": "2007",
+    "bangumiId": 66253,
+    "aliases": [
+      "神奇一家",
+      "罗拨神奇家族",
+      "未来小子",
+      "遇见罗宾森一家",
+      "Meet the Robinsons"
+    ]
+  },
+  {
+    "id": "bgm-208044",
+    "name": "宝贝老板",
+    "year": "2017",
+    "bangumiId": 208044,
+    "aliases": ["娃娃老板", "波士BB", "The Boss Baby"]
+  },
+  {
+    "id": "bgm-340866",
+    "name": "宝贝老板2",
+    "year": "2021",
+    "bangumiId": 340866,
+    "aliases": [
+      "波士BB 2世祖",
+      "宝贝老板：家大业大",
+      "宝贝老板2：家族企业",
+      "The Boss Baby: Family Business"
+    ]
+  },
+  {
+    "id": "bgm-39088",
+    "name": "马达加斯加",
+    "year": "2005",
+    "bangumiId": 39088,
+    "aliases": ["荒失失奇兵", "Madagascar"]
+  },
+  {
+    "id": "bgm-39089",
+    "name": "马达加斯加2：逃往非洲",
+    "year": "2008",
+    "bangumiId": 39089,
+    "aliases": [
+      "狂野大自然2",
+      "荒失失奇兵2",
+      "马达加斯加2",
+      "Madagascar: Escape to Africa"
+    ]
+  },
+  {
+    "id": "bgm-46126",
+    "name": "马达加斯加3",
+    "year": "2012",
+    "bangumiId": 46126,
+    "aliases": [
+      "馬達加斯加3：歐洲大圍捕",
+      "荒失失奇兵3：歐洲逐只捉",
+      "马达加斯加3：欧洲通缉犯",
+      "Madagascar 3: Europe's Most Wanted"
+    ]
+  },
+  {
+    "id": "bgm-116276",
+    "name": "马达加斯加的企鹅",
+    "year": "2014",
+    "bangumiId": 116276,
+    "aliases": ["Penguins of Madagascar"]
+  },
+  {
+    "id": "bgm-40190",
+    "name": "冰川时代",
+    "year": "2002",
+    "bangumiId": 40190,
+    "aliases": ["冰河世纪", "冰原历险记", "Ice Age"]
+  },
+  {
+    "id": "bgm-40191",
+    "name": "冰川时代2：融冰之灾",
+    "year": "2006",
+    "bangumiId": 40191,
+    "aliases": [
+      "Ice Age 2",
+      "冰原历险记2",
+      "冰河世纪2：消融",
+      "Ice Age: The Meltdown"
+    ]
+  },
+  {
+    "id": "bgm-45810",
+    "name": "冰川时代4：大陆漂移",
+    "year": "2012",
+    "bangumiId": 45810,
+    "aliases": ["Ice Age4", "Ice Age: Continental Drift"]
+  },
+  {
+    "id": "bgm-161942",
+    "name": "冰川时代5：星际碰撞",
+    "year": "2016",
+    "bangumiId": 161942,
+    "aliases": [
+      "冰河世纪5",
+      "冰川时代5：碰撞航向",
+      "冰原历险记5：笑星撞地球",
+      "Ice Age: Collision Course"
+    ]
+  },
+  {
+    "id": "bgm-16437",
+    "name": "里约大冒险",
+    "year": "2011",
+    "bangumiId": 16437,
+    "aliases": ["鹦鹉布鲁", "Rio"]
+  },
+  {
+    "id": "bgm-67807",
+    "name": "里约大冒险2",
+    "year": "2014",
+    "bangumiId": 67807,
+    "aliases": ["Rio 2"]
+  },
+  {
+    "id": "bgm-11909",
+    "name": "神偷奶爸",
+    "year": "2010",
+    "bangumiId": 11909,
+    "aliases": ["卑鄙的我", "偷天换“月”", "壞蛋獎門人", "Despicable Me"]
+  },
+  {
+    "id": "bgm-67809",
+    "name": "神偷奶爸2",
+    "year": "2013",
+    "bangumiId": 67809,
+    "aliases": ["卑鄙的我2", "壞蛋獎門人2", "Despicable Me 2"]
+  },
+  {
+    "id": "bgm-111361",
+    "name": "神偷奶爸3",
+    "year": "2017",
+    "bangumiId": 111361,
+    "aliases": ["卑鄙的我3", "壞蛋獎門人3", "Despicable Me 3"]
+  },
+  {
+    "id": "bgm-390677",
+    "name": "神偷奶爸4",
+    "year": "2024",
+    "bangumiId": 390677,
+    "aliases": ["卑鄙的我4", "坏蛋奖门人4", "Despicable Me 4"]
+  },
+  {
+    "id": "bgm-111359",
+    "name": "小黄人大眼萌",
+    "year": "2015",
+    "bangumiId": 111359,
+    "aliases": ["小黄人", "迷你兵團", "小小兵", "Minions"]
+  },
+  {
+    "id": "bgm-378297",
+    "name": "小黄人大眼萌：神偷奶爸前传",
+    "year": "2022",
+    "bangumiId": 378297,
+    "aliases": [
+      "小黄人大眼萌2：格鲁的崛起",
+      "迷你兵團2",
+      "小小兵2：格魯的崛起",
+      "Minions: The Rise of Gru"
+    ]
+  },
+  {
+    "id": "bgm-183590",
+    "name": "欢乐好声音",
+    "year": "2016",
+    "bangumiId": 183590,
+    "aliases": ["动物园好声音", "星夢動物園", "Sing"]
+  },
+  {
+    "id": "bgm-363285",
+    "name": "欢乐好声音2",
+    "year": "2021",
+    "bangumiId": 363285,
+    "aliases": ["星夢動物園2", "Sing 2"]
+  },
+  {
+    "id": "bgm-137892",
+    "name": "爱宠大机密",
+    "year": "2016",
+    "bangumiId": 137892,
+    "aliases": ["宠物的秘密生活", "宠物当家", "The Secret Life of Pets"]
+  },
+  {
+    "id": "bgm-285724",
+    "name": "爱宠大机密2",
+    "year": "2019",
+    "bangumiId": 285724,
+    "aliases": ["宠物当家2", "Pet Pet当家2", "The Secret Life of Pets 2"]
+  },
+  {
+    "id": "bgm-235920",
+    "name": "超级马力欧兄弟大电影",
+    "year": "2023",
+    "bangumiId": 235920,
+    "aliases": [
+      "超级马里奥兄弟大电影",
+      "超級瑪利歐兄弟大電影",
+      "超級瑪利歐兄弟電影版",
+      "ザ スーパーマリオブラザーズ ムービー",
+      "The Super Mario Bros. Movie"
+    ]
+  },
+  {
+    "id": "bgm-428134",
+    "name": "飞鸭向前冲",
+    "year": "2023",
+    "bangumiId": 428134,
+    "aliases": ["鸭仔也移民", "Migration"]
+  },
+  {
+    "id": "bgm-34237",
+    "name": "穿靴子的猫",
+    "year": "2011",
+    "bangumiId": 34237,
+    "aliases": ["无敌猫剑侠", "鞋猫剑客", "靴猫外传", "Puss In Boots"]
+  },
+  {
+    "id": "bgm-58915",
+    "name": "怪物史瑞克",
+    "year": "2001",
+    "bangumiId": 58915,
+    "aliases": ["怪物史莱克", "Shrek"]
+  },
+  {
+    "id": "bgm-58918",
+    "name": "怪物史瑞克2",
+    "year": "2004",
+    "bangumiId": 58918,
+    "aliases": ["怪物史莱克2", "Shrek 2"]
+  },
+  {
+    "id": "bgm-58960",
+    "name": "怪物史瑞克3",
+    "year": "2007",
+    "bangumiId": 58960,
+    "aliases": ["怪物史莱克3", "Shrek the Third"]
+  },
+  {
+    "id": "bgm-210399",
+    "name": "魔发精灵",
+    "year": "2016",
+    "bangumiId": 210399,
+    "aliases": ["Trolls"]
+  },
+  {
+    "id": "bgm-421003",
+    "name": "魔发精灵3",
+    "year": "2023",
+    "bangumiId": 421003,
+    "aliases": ["Trolls 3", "Trolls Band Together"]
+  },
+  {
+    "id": "bgm-95784",
+    "name": "乐高大电影",
+    "year": "2014",
+    "bangumiId": 95784,
+    "aliases": [
+      "Lego: The Piece of Resistance",
+      "乐高玩电影",
+      "LEGO英雄传",
+      "The Lego Movie"
+    ]
+  },
+  {
+    "id": "bgm-270083",
+    "name": "乐高大电影2",
+    "year": "2019",
+    "bangumiId": 270083,
+    "aliases": ["The Lego Movie 2: The Second Part"]
+  },
+  {
+    "id": "bgm-175428",
+    "name": "乐高蝙蝠侠大电影",
+    "year": "2017",
+    "bangumiId": 175428,
+    "aliases": ["乐高大电影：蝙蝠侠", "乐高蝙蝠侠", "The Lego Batman Movie"]
+  },
+  {
+    "id": "bgm-131622",
+    "name": "小王子",
+    "year": "2015",
+    "bangumiId": 131622,
+    "aliases": [
+      "リトルプリンス 星の王子さまと私",
+      "The Little Prince",
+      "Le Petit Prince"
+    ]
+  },
+  {
+    "id": "bgm-292749",
+    "name": "雪人奇缘",
+    "year": "2019",
+    "bangumiId": 292749,
+    "aliases": ["长毛雪宝", "坏坏萌雪怪", "Abominable"]
+  },
+  {
+    "id": "bgm-249628",
+    "name": "雪怪大冒险",
+    "year": "2018",
+    "bangumiId": 249628,
+    "aliases": ["尋找小腳八", "Smallfoot"]
+  },
+  {
+    "id": "bgm-356475",
+    "name": "蜜熊的音乐奇旅",
+    "year": "2021",
+    "bangumiId": 356475,
+    "aliases": ["蜜熊仔维沃", "维沃的精彩生活", "Vivo"]
+  },
+  {
+    "id": "bgm-328444",
+    "name": "寻龙传说",
+    "year": "2021",
+    "bangumiId": 328444,
+    "aliases": ["尋龍使者：拉雅", "魔龍王國", "Raya and The Last Dragon"]
+  },
+  {
+    "id": "bgm-47891",
+    "name": "凯尔经的秘密",
+    "year": "2009",
+    "bangumiId": 47891,
+    "aliases": [
+      "凯尔斯的秘密",
+      "凯尔斯修道院的秘密",
+      "布兰登和凯尔斯福音书",
+      "布伦达和凯尔圣书的秘密",
+      "Brendan and the Secret of Kells",
+      "The Secret of Kells"
+    ]
+  },
+  {
+    "id": "bgm-119356",
+    "name": "海洋之歌",
+    "year": "2015",
+    "bangumiId": 119356,
+    "aliases": ["海洋幻想曲", "Le Chant de la Mer", "Song of the Sea"]
+  },
+  {
+    "id": "bgm-211780",
+    "name": "狼行者",
+    "year": "2020",
+    "bangumiId": 211780,
+    "aliases": ["Wolfwalkers"]
+  },
+  {
+    "id": "bgm-58914",
+    "name": "小鸡快跑",
+    "year": "2000",
+    "bangumiId": 58914,
+    "aliases": ["小鸡大逃亡", "咪走雞", "落跑雞", "Chicken Run"]
+  },
+  {
+    "id": "bgm-306381",
+    "name": "小羊肖恩2：末日农场",
+    "year": "2019",
+    "bangumiId": 306381,
+    "aliases": [
+      "Shaun the Sheep 2",
+      "笑笑羊大电影2：外星人来了！",
+      "A Shaun the Sheep Movie: Farmageddon"
+    ]
+  },
+  {
+    "id": "bgm-305",
+    "name": "魔女宅急便",
+    "year": "1989",
+    "bangumiId": 305,
+    "aliases": ["Kiki's Delivery Service", "魔女の宅急便"]
+  },
+  {
+    "id": "bgm-313",
+    "name": "崖上的波妞",
+    "year": "2008",
+    "bangumiId": 313,
+    "aliases": [
+      "Ponyo",
+      "悬崖上的金鱼姬",
+      "悬崖上的金鱼公主",
+      "崖上の波兒",
+      "崖の上のポニョ"
+    ]
+  },
+  {
+    "id": "bgm-311",
+    "name": "千与千寻",
+    "year": "2001",
+    "bangumiId": 311,
+    "aliases": [
+      "千与千寻的神隐",
+      "神隱少女",
+      "Spirited Away",
+      "Sen to Chihiro no Kamikakushi",
+      "千と千尋の神隠し"
+    ]
+  },
+  {
+    "id": "bgm-298",
+    "name": "天空之城",
+    "year": "1986",
+    "bangumiId": 298,
+    "aliases": [
+      "天空之城拉普他",
+      "空中城堡“拉普他”",
+      "Tenkû no shiro Rapyuta",
+      "Laputa: Castle in the Sky",
+      "天空の城ラピュタ"
+    ]
+  },
+  {
+    "id": "bgm-312",
+    "name": "哈尔的移动城堡",
+    "year": "2004",
+    "bangumiId": 312,
+    "aliases": [
+      "Howl's Moving Castle",
+      "霍爾的移動城堡",
+      "豪尔的机动城堡",
+      "呼啸山城",
+      "ハウルの動く城"
+    ]
+  },
+  {
+    "id": "bgm-506",
+    "name": "猫的报恩",
+    "year": "2002",
+    "bangumiId": 506,
+    "aliases": ["貓的報恩", "The Cat Returns", "猫の恩返し"]
+  },
+  {
+    "id": "bgm-1962",
+    "name": "大闹天宫",
+    "year": "1961",
+    "bangumiId": 1962,
+    "aliases": [
+      "Sun Ukun: Uproar in Heaven",
+      "Da nao tien gong",
+      "Havoc in Heaven",
+      "大暴れ孫悟空",
+      "大鬧天宮"
+    ]
+  },
+  {
+    "id": "bgm-13012",
+    "name": "哪吒闹海",
+    "year": "1979",
+    "bangumiId": 13012,
+    "aliases": [
+      "哪吒鬧海",
+      "Prince Nezha's Triumph Against Dragon King",
+      "Nezha Nao Hai",
+      "Nezha Conquers the Dragon King",
+      "ナーザの大暴れ",
+      "ナーザが海を騒がす"
+    ]
+  },
+  {
+    "id": "bgm-36186",
+    "name": "天书奇谭",
+    "year": "1983",
+    "bangumiId": 36186,
+    "aliases": ["The Legend of Sealed Book", "天書奇譚"]
+  },
+  {
+    "id": "bgm-3849",
+    "name": "宝莲灯",
+    "year": "1999",
+    "bangumiId": 3849,
+    "aliases": ["Lotus Lantern"]
+  },
+  {
+    "id": "bgm-216206",
+    "name": "大耳朵图图之美食狂想曲",
+    "year": "2017",
+    "bangumiId": 216206,
+    "aliases": []
+  },
+  {
+    "id": "bgm-351269",
+    "name": "大耳朵图图之霸王龙在行动",
+    "year": "2021",
+    "bangumiId": 351269,
+    "aliases": []
+  },
+  {
+    "id": "bgm-159725",
+    "name": "罗小黑战记",
+    "year": "2019",
+    "bangumiId": 159725,
+    "aliases": ["罗小黑战记 电影版", "罗小黑战记大电影"]
+  },
+  {
+    "id": "bgm-144969",
+    "name": "舒克贝塔·五角飞碟",
+    "year": "2023",
+    "bangumiId": 144969,
+    "aliases": ["舒克贝塔之五角飞碟", "舒克和贝塔 电影版"]
+  },
+  {
+    "id": "bgm-95800",
+    "name": "哆啦A梦：伴我同行",
+    "year": "2014",
+    "bangumiId": 95800,
+    "aliases": ["STAND BY ME ドラえもん"]
+  },
+  {
+    "id": "bgm-296287",
+    "name": "哆啦A梦：伴我同行2",
+    "year": "2020",
+    "bangumiId": 296287,
+    "aliases": ["STAND BY ME ドラえもん 2"]
+  },
+  {
+    "id": "bgm-425",
+    "name": "哆啦A梦：大雄的恐龙",
+    "year": "1980",
+    "bangumiId": 425,
+    "aliases": [
+      "大雄的恐龙",
+      "Doraemon: Nobita no Kyouryuu",
+      "ドラえもん のび太の恐竜"
+    ]
+  },
+  {
+    "id": "bgm-285759",
+    "name": "哆啦A梦：大雄的新恐龙",
+    "year": "2020",
+    "bangumiId": 285759,
+    "aliases": [
+      "Doraemon the Movie: Nobita`s New Dinosaur",
+      "Eiga Doraemon: Nobita no Shin Kyouryuu",
+      "Doraemon Movie 40",
+      "电影哆啦A梦：大雄的新恐龙",
+      "映画ドラえもん のび太の新恐竜"
+    ]
+  },
+  {
+    "id": "bgm-217072",
+    "name": "哆啦A梦：大雄的金银岛",
+    "year": "2018",
+    "bangumiId": 217072,
+    "aliases": [
+      "哆啦A梦 大雄的宝岛",
+      "电影多啦A梦：大雄之金银岛",
+      "映画ドラえもん のび太の宝島"
+    ]
+  },
+  {
+    "id": "bgm-263808",
+    "name": "哆啦A梦：大雄的月球探险记",
+    "year": "2019",
+    "bangumiId": 263808,
+    "aliases": [
+      "Doraemon: Nobita's Chronicle of the Moon Exploration",
+      "哆啦A梦：大雄的月球探测记",
+      "哆啦A梦 野比的月面探査记",
+      "映画ドラえもん のび太の月面探査記"
+    ]
+  },
+  {
+    "id": "bgm-325571",
+    "name": "哆啦A梦：大雄的宇宙小战争2021",
+    "year": "2022",
+    "bangumiId": 325571,
+    "aliases": [
+      "ドラえもん のび太の宇宙小戦争 2021",
+      "Doraemon: Nobita's Little Star Wars 2021",
+      "哆啦A梦 大雄的宇宙小战争 2021",
+      "映画ドラえもん のび太の宇宙小戦争2021"
+    ]
+  },
+  {
+    "id": "bgm-390873",
+    "name": "哆啦A梦：大雄与天空的理想乡",
+    "year": "2023",
+    "bangumiId": 390873,
+    "aliases": [
+      "Eiga Doraemon: Nobita to Sora no Utopia",
+      "Doraemon the Movie: Nobita's Sky Utopia",
+      "哆啦A梦 大雄与天空乌托邦",
+      "映画ドラえもん のび太と空の理想郷"
+    ]
+  }
+]

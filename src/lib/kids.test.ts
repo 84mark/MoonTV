@@ -44,3 +44,23 @@ it('sends every pick to source discovery with its content type and an age-preser
     expect(url.searchParams.get('year')).toBe(item.year || null);
   }
 });
+
+it('ships an offline, traceable movie catalog with separate sequels', () => {
+  const movies = KIDS_TITLES.filter((item) => item.kind === 'movie');
+  expect(movies.length).toBeGreaterThanOrEqual(100);
+  expect(
+    movies.every((item) => item.catalogSource?.provider === 'bangumi')
+  ).toBe(true);
+  expect(movies.every((item) => /^\d{4}$/.test(item.year || ''))).toBe(true);
+  expect(new Set(movies.map((item) => item.catalogSource?.id)).size).toBe(
+    movies.length
+  );
+  const first = movies.find((item) => item.id === 'toystory');
+  const second = movies.find((item) => item.name === '玩具总动员2');
+  expect(first?.year).toBe('1995');
+  expect(second?.year).toBe('1999');
+  expect(first?.id).not.toBe(second?.id);
+  expect(filterKidsTitles('8-12', '全部', '料理鼠王')).toEqual([
+    expect.objectContaining({ name: '美食总动员' }),
+  ]);
+});

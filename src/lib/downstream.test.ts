@@ -51,3 +51,47 @@ it('uses the configured source for details and retains API authentication parame
   expect(target.searchParams.get('ids')).toBe('7');
   expect(target.searchParams.get('token')).toBe('api-key');
 });
+
+it('keeps alternate movie playlists as one episode on later search pages', async () => {
+  const movie = { ...item, vod_play_url: `正片$${first}$$$正片$${second}` };
+  fetchMock
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ list: [movie], pagecount: 2 }))
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ list: [movie], pagecount: 2 }))
+    );
+  const results = await searchFromApi(site, '测试', 2);
+  expect(results).toHaveLength(2);
+  expect(results.map((result) => result.episodes)).toEqual([[first], [first]]);
+  expect(new URL(fetchMock.mock.calls[1][0]).searchParams.get('pg')).toBe('2');
+});
+
+it('does not fetch any page after discovery was cancelled', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  expect(await searchFromApi(site, '测试', 2, controller.signal)).toEqual([]);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it('forwards discovery cancellation to an in-flight later page', async () => {
+  const controller = new AbortController();
+  let pageSignal: AbortSignal | undefined;
+  fetchMock
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ list: [item], pagecount: 2 }))
+    )
+    .mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          pageSignal = init.signal;
+          pageSignal?.addEventListener('abort', () =>
+            reject(new Error('aborted'))
+          );
+          controller.abort();
+        })
+    );
+  const results = await searchFromApi(site, '测试', 2, controller.signal);
+  expect(pageSignal?.aborted).toBe(true);
+  expect(results).toHaveLength(1);
+});
