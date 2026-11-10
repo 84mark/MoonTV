@@ -1,17 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import {
-  ChevronDown,
-  Film,
-  ImageIcon,
-  Languages,
-  Play,
-  Search,
-  Sparkles,
-  Tv,
-  X,
-} from 'lucide-react';
+import { ImageIcon, Languages, Play, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -29,6 +19,8 @@ import type { SearchResult } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 
 import PageLayout from '@/components/PageLayout';
+
+const PAGE_SIZE = 25;
 
 interface Variant {
   id: string;
@@ -122,7 +114,7 @@ function KidsPageClient() {
   const language = params.get('language') || 'all';
   const [query, setQuery] = useState('');
   const [theme, setTheme] = useState('全部');
-  const [limit, setLimit] = useState(8);
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [retry, setRetry] = useState(0);
   const [pools, setPools] = useState<Record<string, Pool>>({});
   const [posters, setPosters] = useState<Record<string, string>>({});
@@ -133,6 +125,10 @@ function KidsPageClient() {
     variantId?: string;
   } | null>(null);
   const modal = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setLimit(PAGE_SIZE);
+  }, [kind, language, theme, query]);
   const titleSeeds = useMemo(
     () => KIDS_TITLES.filter((item) => item.kind === kind),
     [kind]
@@ -212,8 +208,13 @@ function KidsPageClient() {
         }
       }
     }
-    void Promise.all([worker(), worker()]);
-    return () => controller.abort();
+    const timer = setTimeout(() => {
+      void Promise.all([worker(), worker()]);
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [idsKey, retry, storePool]);
   // Posters are metadata only: their original language never labels a playable version.
   useEffect(() => {
@@ -258,8 +259,13 @@ function KidsPageClient() {
         }
       }
     }
-    void Promise.all([worker(), worker()]);
-    return () => controller.abort();
+    const timer = setTimeout(() => {
+      void Promise.all([worker(), worker()]);
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [idsKey, retry]);
   const selectedSeedId = selection?.seedId;
   useEffect(() => {
@@ -348,8 +354,23 @@ function KidsPageClient() {
   const busy = pageSeeds.some(
     (seed) => !pools[seed.id] || pools[seed.id].status === 'loading'
   );
+  const hasMore = matchingSeeds.length > limit;
+  useEffect(() => {
+    if (!hasMore || busy || !loadingRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          observer.disconnect();
+          setLimit((value) => value + PAGE_SIZE);
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(loadingRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, busy, limit]);
   const updateFilter = (nextKind: string, nextLanguage = language) => {
-    setLimit(8);
+    setLimit(PAGE_SIZE);
     if (nextKind !== kind) {
       setTheme('全部');
       setQuery('');
@@ -371,344 +392,275 @@ function KidsPageClient() {
   };
   return (
     <PageLayout activePath='/kids'>
-      <div className='mx-auto max-w-7xl space-y-5 px-4 pb-28 pt-6 md:px-8 md:pt-16'>
-        <header className='relative overflow-hidden rounded-[28px] border border-white/70 bg-gradient-to-r from-sky-100 via-cyan-50 to-amber-100 p-5 dark:border-slate-700 dark:from-sky-950 dark:via-slate-900 dark:to-amber-950 md:p-7'>
-          <div className='pointer-events-none absolute -right-5 -top-12 h-40 w-40 rounded-full border-[20px] border-white/35' />
-          <p className='mb-2 flex items-center gap-2 text-sm font-semibold text-sky-700 dark:text-sky-300'>
-            <Sparkles className='h-4 w-4' />
-            今天想和谁一起冒险？
-          </p>
-          <h1 className='relative text-3xl font-black tracking-tight text-slate-800 dark:text-white md:text-4xl'>
-            动画小天地
-          </h1>
-          <p className='mt-2 text-sm text-slate-600 dark:text-slate-300'>
-            挑一张喜欢的海报，再选听得懂的语言。
-          </p>
-        </header>
-        <section className='grid grid-cols-2 gap-3' aria-label='动画类型'>
-          {[
-            {
-              kind: 'tv',
-              name: '动画剧集',
-              hint: '一集一集，认识新朋友',
-              icon: Tv,
-            },
-            {
-              kind: 'movie',
-              name: '动画电影',
-              hint: '一起看一场大冒险',
-              icon: Film,
-            },
-          ].map((item) => (
-            <button
-              key={item.kind}
-              aria-pressed={kind === item.kind}
-              onClick={() => updateFilter(item.kind, 'all')}
-              className={`flex min-h-[76px] items-center gap-3 rounded-2xl border-2 p-3 text-left transition-all sm:p-4 ${
-                kind === item.kind
-                  ? 'border-sky-400 bg-sky-500 text-white shadow-lg shadow-sky-500/15 dark:border-sky-500'
-                  : 'border-transparent bg-white/70 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-              }`}
-            >
-              <span
-                className={`rounded-xl p-2 ${
-                  kind === item.kind ? 'bg-white/20' : 'bg-sky-500/10'
-                }`}
-              >
-                <item.icon className='h-6 w-6' />
-              </span>
-              <span>
-                <strong className='block text-base sm:text-lg'>
-                  {item.name}
-                </strong>
-                <span
-                  className={`mt-1 hidden text-xs sm:block ${
-                    kind === item.kind ? 'text-sky-50' : 'text-slate-400'
-                  }`}
-                >
-                  {item.hint}
-                </span>
-              </span>
-            </button>
-          ))}
-        </section>
-        <div className='flex items-center gap-3 rounded-2xl border border-white/70 bg-white/75 px-4 shadow-sm dark:border-slate-700 dark:bg-slate-800'>
-          <Search className='h-5 w-5 shrink-0 text-sky-500' />
-          <input
-            aria-label='搜索动画'
-            value={query}
-            onChange={(event) => {
-              setLimit(8);
-              setQuery(event.target.value);
-            }}
-            placeholder='找找喜欢的动画…'
-            className='min-h-[52px] min-w-0 flex-1 bg-transparent text-base outline-none'
-          />
-          {query && (
-            <button
-              aria-label='清除搜索'
-              onClick={() => setQuery('')}
-              className='p-2'
-            >
-              <X className='h-4 w-4' />
-            </button>
-          )}
-        </div>
-        <section
-          aria-label='选择动画语言'
-          className='flex items-center gap-2 overflow-x-auto pb-1'
-        >
-          <Languages className='h-4 w-4 shrink-0 text-slate-400' />
-          <button
-            aria-pressed={language === 'all'}
-            onClick={() => updateFilter(kind, 'all')}
-            className={`min-h-[40px] shrink-0 rounded-full px-4 text-sm font-semibold ${
-              language === 'all'
-                ? 'bg-amber-300 text-amber-950'
-                : 'bg-white/70 text-slate-500 dark:bg-slate-800'
-            }`}
-          >
-            所有语言
-          </button>
-          {availableLanguages.map(([code, label]) => (
-            <button
-              key={code}
-              aria-pressed={language === code}
-              onClick={() => updateFilter(kind, code)}
-              className={`min-h-[40px] shrink-0 rounded-full px-4 text-sm font-semibold ${
-                language === code
-                  ? 'bg-amber-300 text-amber-950'
-                  : 'bg-white/70 text-slate-500 dark:bg-slate-800'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-          {language !== 'all' &&
-            !availableLanguages.some(([code]) => code === language) && (
-              <span className='shrink-0 text-sm text-slate-400'>
-                {busy ? '正在查找这个语言版本…' : '暂未找到这个语言版本'}
-              </span>
-            )}
-        </section>
-        <div className='flex gap-2 overflow-x-auto pb-1' aria-label='动画主题'>
-          {themes.map((value) => (
-            <button
-              key={value}
-              aria-pressed={theme === value}
-              onClick={() => {
-                setTheme(value);
-                setLimit(8);
-              }}
-              className={`min-h-[36px] shrink-0 rounded-xl px-3 text-xs ${
-                theme === value
-                  ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
-                  : 'text-slate-500 dark:text-slate-400'
-              }`}
-            >
-              {value === '全部' ? '全部动画' : value}
-            </button>
-          ))}
-        </div>
-        <div className='flex items-center justify-between gap-3'>
-          <h2 className='text-lg font-bold'>
-            {query ? '找到的动画' : kind === 'tv' ? '动画朋友们' : '大电影时间'}
-          </h2>
-          <p role='status' className='text-xs text-slate-400'>
-            {busy
-              ? '正在找动画和语言版本…'
-              : `${cards.filter((card) => card.variant).length} 个资源版本`}
-          </p>
-        </div>
-        <section
-          aria-label='动画海报'
-          className='grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
-        >
-          {cards.map(({ seed, variant }) => {
-            const pool = pools[seed.id];
-            const title = variant?.title || seed.name;
-            const pending = !pool || pool.status === 'loading';
-            return (
-              <button
-                key={variant?.id || seed.id}
-                onClick={() =>
-                  setSelection({ seedId: seed.id, variantId: variant?.id })
-                }
-                aria-label={`选择 ${title} · ${
-                  variant?.language.label || '查找版本'
-                }`}
-                className='group min-w-0 rounded-2xl text-left outline-none focus-visible:ring-4 focus-visible:ring-sky-400/50'
-              >
-                <div className='relative aspect-[2/3] overflow-hidden rounded-2xl bg-slate-100 shadow-md transition-transform group-hover:-translate-y-1 dark:bg-slate-800'>
-                  <Poster
-                    url={
-                      variant?.poster ||
-                      variant?.sources.find((source) => source.poster)
-                        ?.poster ||
-                      posters[seed.id] ||
-                      ''
-                    }
-                    name={title}
-                    fallbackUrls={[
-                      posters[seed.id] || '',
-                      ...(variant?.sources.map((source) => source.poster) ||
-                        []),
-                    ].filter(Boolean)}
-                    pending={
-                      pending ||
-                      (!variant?.poster &&
-                        !variant?.sources.some((source) => source.poster) &&
-                        !(seed.id in posters))
-                    }
-                  />
-                  <div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-2 pb-2 pt-12'>
-                    <span
-                      className={`inline-flex max-w-full items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold shadow-sm sm:text-xs ${
-                        variant
-                          ? variant.language.code === 'unknown'
-                            ? 'bg-amber-100 text-amber-900'
-                            : 'bg-white text-slate-800'
-                          : 'bg-black/50 text-white'
-                      }`}
-                    >
-                      <Languages className='h-3 w-3 shrink-0' />
-                      <span className='truncate'>
-                        {variant?.language.label ||
-                          (pending
-                            ? '正在找版本…'
-                            : pool?.status === 'error'
-                            ? '点我再试试'
-                            : '暂未找到片源')}
-                      </span>
-                    </span>
-                  </div>
-                  {variant && (
-                    <span className='absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-sky-600 shadow-sm'>
-                      <Play className='ml-0.5 h-4 w-4 fill-current' />
-                    </span>
-                  )}
-                </div>
-                <h3 className='mt-2 line-clamp-2 text-sm font-bold leading-5 text-slate-800 dark:text-slate-100 sm:text-base'>
-                  {title}
-                </h3>
-                <p className='mt-1 truncate text-xs text-slate-400'>
-                  {variant
-                    ? [
-                        variant.season,
-                        variant.year,
-                        `${
-                          pools[seed.id].variants.filter(
-                            (value) =>
-                              value.language.code === variant.language.code
-                          ).length
-                        } 个季 / 版本可选`,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                    : pending
-                    ? '马上就好'
-                    : '看看详情，或重新找一找'}
-                </p>
-              </button>
-            );
-          })}
-        </section>
-        {!cards.length && (
-          <div className='rounded-3xl bg-white/60 p-10 text-center dark:bg-slate-800'>
-            <Search className='mx-auto mb-3 h-8 w-8 text-sky-400' />
-            <h3 className='font-bold'>还没找到这部动画</h3>
-            <p className='mt-2 text-sm text-slate-500'>
-              换个名字或语言，再找找吧。
+      <div className='catalog-page overflow-visible'>
+        <div className='mb-6 space-y-4 sm:mb-8 sm:space-y-6'>
+          <header>
+            <h1 className='mb-1 text-2xl font-bold text-gray-800 dark:text-gray-200 sm:mb-2 sm:text-3xl'>
+              少儿
+            </h1>
+            <p className='text-sm text-gray-600 dark:text-gray-400 sm:text-base'>
+              精选动画剧集与电影
             </p>
-            <button
-              className='mt-4 rounded-xl bg-sky-500 px-5 py-3 font-semibold text-white'
-              onClick={() => {
-                setQuery('');
-                setTheme('全部');
-                updateFilter(kind, 'all');
-              }}
+          </header>
+          <div className='glass-panel space-y-4 p-4 sm:space-y-6 sm:p-6'>
+            <div
+              className='flex flex-col gap-2 sm:flex-row sm:items-center'
+              aria-label='动画类型'
             >
-              看看全部动画
-            </button>
-          </div>
-        )}
-        {matchingSeeds.length > limit && (
-          <div className='text-center'>
-            <button
-              className='inline-flex min-h-[48px] items-center gap-2 rounded-full bg-white px-7 font-bold text-sky-700 shadow-sm dark:bg-slate-800 dark:text-sky-300'
-              onClick={() => setLimit((value) => value + 8)}
-            >
-              再看更多动画
-              <ChevronDown className='h-4 w-4' />
-            </button>
-          </div>
-        )}
-        {pageSeeds.some(
-          (seed) =>
-            pools[seed.id] &&
-            pools[seed.id].status !== 'loading' &&
-            !pools[seed.id].variants.length
-        ) && (
-          <details className='rounded-2xl border border-slate-200/60 p-4 text-sm text-slate-500 dark:border-slate-700'>
-            <summary className='cursor-pointer'>再找找其他动画</summary>
-            <p className='mt-3 text-xs'>
-              这些动画暂时没有找到片源，可以点片名重新查找。
-            </p>
-            <div className='mt-3 flex flex-wrap gap-2'>
-              {pageSeeds
-                .filter(
-                  (seed) =>
-                    pools[seed.id] &&
-                    pools[seed.id].status !== 'loading' &&
-                    !pools[seed.id].variants.length
-                )
-                .map((seed) => (
+              <span className='min-w-[48px] text-xs font-medium text-gray-600 dark:text-gray-400 sm:text-sm'>
+                分类
+              </span>
+              <div className='glass-segment inline-flex w-fit rounded-full p-0.5 sm:p-1'>
+                {[
+                  { kind: 'tv', name: '动画剧集' },
+                  { kind: 'movie', name: '动画电影' },
+                ].map((item) => (
                   <button
-                    key={seed.id}
-                    className='min-h-[44px] rounded-xl bg-white/70 px-3 text-xs dark:bg-slate-800'
-                    onClick={() => {
-                      retrySeed(seed.id);
-                      setSelection({ seedId: seed.id });
-                    }}
+                    key={item.kind}
+                    aria-pressed={kind === item.kind}
+                    onClick={() => updateFilter(item.kind, 'all')}
+                    className={`rounded-full px-2 py-1 text-xs font-medium transition-all sm:px-4 sm:py-2 sm:text-sm ${
+                      kind === item.kind
+                        ? 'glass-segment-indicator text-gray-900 dark:text-gray-100'
+                        : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                    }`}
                   >
-                    {seed.name}
+                    {item.name}
                   </button>
                 ))}
+              </div>
             </div>
-          </details>
-        )}
-        <details className='rounded-2xl border border-slate-200/60 p-4 text-sm text-slate-500 dark:border-slate-700'>
-          <summary className='cursor-pointer font-medium'>家长入口</summary>
-          <p className='mt-3 text-xs leading-6'>
-            语言来自播放源标注，未明确标注的版本显示“语言待确认”。片源可用性会变化，请陪孩子一起选片。
-          </p>
-          <div className='mt-3 flex flex-wrap gap-3 text-xs'>
-            <a
-              href='https://tv.cctv.com/cctv14/'
-              target='_blank'
-              rel='noreferrer'
-              className='rounded-lg bg-white/60 px-3 py-2 dark:bg-slate-800'
+            <div
+              className='flex flex-col gap-2 sm:flex-row sm:items-center'
+              aria-label='选择动画语言'
             >
-              央视少儿 ↗
-            </a>
-            <a
-              href='https://pbskids.org/video/'
-              target='_blank'
-              rel='noreferrer'
-              className='rounded-lg bg-white/60 px-3 py-2 dark:bg-slate-800'
+              <span className='min-w-[48px] text-xs font-medium text-gray-600 dark:text-gray-400 sm:text-sm'>
+                语言
+              </span>
+              <div className='overflow-x-auto'>
+                <div className='glass-segment inline-flex rounded-full p-0.5 sm:p-1'>
+                  {[['all', '所有语言'], ...availableLanguages].map(
+                    ([code, label]) => (
+                      <button
+                        key={code}
+                        aria-pressed={language === code}
+                        onClick={() => updateFilter(kind, code)}
+                        className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-all sm:px-4 sm:py-2 sm:text-sm ${
+                          language === code
+                            ? 'glass-segment-indicator text-gray-900 dark:text-gray-100'
+                            : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+              {language !== 'all' &&
+                !availableLanguages.some(([code]) => code === language) && (
+                  <span className='text-xs text-gray-500'>
+                    {busy ? '正在查找这个语言版本…' : '暂未找到这个语言版本'}
+                  </span>
+                )}
+            </div>
+            <div
+              className='flex flex-col gap-2 sm:flex-row sm:items-center'
+              aria-label='动画主题'
             >
-              PBS KIDS（部分地区可用）↗
-            </a>
-            <a
-              href='https://en.khanacademy.org/kids'
-              target='_blank'
-              rel='noreferrer'
-              className='rounded-lg bg-white/60 px-3 py-2 dark:bg-slate-800'
-            >
-              Khan Academy Kids（学习 App）↗
-            </a>
+              <span className='min-w-[48px] text-xs font-medium text-gray-600 dark:text-gray-400 sm:text-sm'>
+                主题
+              </span>
+              <div className='overflow-x-auto'>
+                <div className='glass-segment inline-flex rounded-full p-0.5 sm:p-1'>
+                  {themes.map((value) => (
+                    <button
+                      key={value}
+                      aria-pressed={theme === value}
+                      onClick={() => {
+                        setTheme(value);
+                        setLimit(PAGE_SIZE);
+                      }}
+                      className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-all sm:px-4 sm:py-2 sm:text-sm ${
+                        theme === value
+                          ? 'glass-segment-indicator text-gray-900 dark:text-gray-100'
+                          : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                      }`}
+                    >
+                      {value === '全部' ? '全部动画' : value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className='flex items-center gap-3 rounded-xl border border-gray-200/60 bg-white/50 px-3 dark:border-gray-700 dark:bg-gray-900/30'>
+              <Search className='h-4 w-4 shrink-0 text-gray-400' />
+              <input
+                aria-label='搜索动画'
+                value={query}
+                onChange={(event) => {
+                  setLimit(PAGE_SIZE);
+                  setQuery(event.target.value);
+                }}
+                placeholder='搜索动画名称'
+                className='min-h-[40px] min-w-0 flex-1 bg-transparent text-sm outline-none'
+              />
+              {query && (
+                <button
+                  aria-label='清除搜索'
+                  onClick={() => setQuery('')}
+                  className='p-2'
+                >
+                  <X className='h-4 w-4' />
+                </button>
+              )}
+            </div>
           </div>
-        </details>
+        </div>
+        <div className='mx-auto mt-8 max-w-[95%] overflow-visible'>
+          <div className='mb-4 flex items-center justify-between gap-3'>
+            <h2 className='text-lg font-bold'>
+              {query ? '搜索结果' : kind === 'tv' ? '动画剧集' : '动画电影'}
+            </h2>
+            <p role='status' className='text-xs text-slate-400'>
+              {busy
+                ? '正在找动画和语言版本…'
+                : `${cards.filter((card) => card.variant).length} 个资源版本`}
+            </p>
+          </div>
+          <section
+            aria-label='动画海报'
+            className='grid grid-cols-2 justify-start gap-x-3 gap-y-5 px-0 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-x-5 sm:gap-y-8 sm:px-2'
+          >
+            {cards.map(({ seed, variant }) => {
+              const pool = pools[seed.id];
+              const title = variant?.title || seed.name;
+              const pending = !pool || pool.status === 'loading';
+              return (
+                <button
+                  key={variant?.id || seed.id}
+                  onClick={() =>
+                    setSelection({ seedId: seed.id, variantId: variant?.id })
+                  }
+                  aria-label={`选择 ${title} · ${
+                    variant?.language.label || '查找版本'
+                  }`}
+                  className='poster-card group min-w-0 text-left outline-none focus-visible:ring-4 focus-visible:ring-sky-400/50'
+                >
+                  <div className='relative aspect-[2/3] overflow-hidden rounded-2xl bg-slate-100 shadow-md transition-transform group-hover:-translate-y-1 dark:bg-slate-800'>
+                    <Poster
+                      url={
+                        variant?.poster ||
+                        variant?.sources.find((source) => source.poster)
+                          ?.poster ||
+                        posters[seed.id] ||
+                        ''
+                      }
+                      name={title}
+                      fallbackUrls={[
+                        posters[seed.id] || '',
+                        ...(variant?.sources.map((source) => source.poster) ||
+                          []),
+                      ].filter(Boolean)}
+                      pending={
+                        pending ||
+                        (!variant?.poster &&
+                          !variant?.sources.some((source) => source.poster) &&
+                          !(seed.id in posters))
+                      }
+                    />
+                    <div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-2 pb-2 pt-12'>
+                      <span
+                        className={`inline-flex max-w-full items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold shadow-sm sm:text-xs ${
+                          variant
+                            ? variant.language.code === 'unknown'
+                              ? 'bg-amber-100 text-amber-900'
+                              : 'bg-white text-slate-800'
+                            : 'bg-black/50 text-white'
+                        }`}
+                      >
+                        <Languages className='h-3 w-3 shrink-0' />
+                        <span className='truncate'>
+                          {variant?.language.label ||
+                            (pending
+                              ? '正在找版本…'
+                              : pool?.status === 'error'
+                              ? '点我再试试'
+                              : '暂未找到片源')}
+                        </span>
+                      </span>
+                    </div>
+                    {variant && (
+                      <span className='absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-sky-600 shadow-sm'>
+                        <Play className='ml-0.5 h-4 w-4 fill-current' />
+                      </span>
+                    )}
+                  </div>
+                  <h3 className='mt-2 line-clamp-2 text-sm font-bold leading-5 text-slate-800 dark:text-slate-100 sm:text-base'>
+                    {title}
+                  </h3>
+                  <p className='mt-1 truncate text-xs text-slate-400'>
+                    {variant
+                      ? [
+                          variant.season,
+                          variant.year,
+                          `${
+                            pools[seed.id].variants.filter(
+                              (value) =>
+                                value.language.code === variant.language.code
+                            ).length
+                          } 个季 / 版本可选`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                      : pending
+                      ? '马上就好'
+                      : '看看详情，或重新找一找'}
+                  </p>
+                </button>
+              );
+            })}
+          </section>
+          {!cards.length && (
+            <div className='rounded-3xl bg-white/60 p-10 text-center dark:bg-slate-800'>
+              <Search className='mx-auto mb-3 h-8 w-8 text-sky-400' />
+              <h3 className='font-bold'>还没找到这部动画</h3>
+              <p className='mt-2 text-sm text-slate-500'>
+                换个名字或语言，再找找吧。
+              </p>
+              <button
+                className='mt-4 rounded-xl bg-sky-500 px-5 py-3 font-semibold text-white'
+                onClick={() => {
+                  setQuery('');
+                  setTheme('全部');
+                  updateFilter(kind, 'all');
+                }}
+              >
+                看看全部动画
+              </button>
+            </div>
+          )}
+          {(hasMore || busy) && (
+            <div
+              ref={loadingRef}
+              aria-label='加载更多动画'
+              className='mt-12 flex justify-center py-8'
+            >
+              {busy && (
+                <div
+                  role='status'
+                  className='flex items-center gap-2 text-gray-600 dark:text-gray-400'
+                >
+                  <div className='h-6 w-6 animate-spin rounded-full border-b-2 border-green-500' />
+                  加载中...
+                </div>
+              )}
+            </div>
+          )}
+          {!hasMore && !busy && cards.length > 0 && (
+            <div className='py-8 text-center text-gray-500'>已加载全部内容</div>
+          )}
+        </div>
       </div>
       {selection && selectedSeed && (
         <div
@@ -833,7 +785,7 @@ export default function KidsPage() {
   return (
     <Suspense
       fallback={
-        <div className='p-8 text-sm text-slate-500'>正在打开动画小天地…</div>
+        <div className='p-8 text-sm text-slate-500'>正在打开少儿频道…</div>
       }
     >
       <KidsPageClient />

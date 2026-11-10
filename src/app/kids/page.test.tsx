@@ -7,10 +7,23 @@ import {
 } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
+import { KIDS_TITLES } from '@/lib/kids';
+
 import KidsPage from './page';
 
 let query = 'kind=tv';
 const replace = jest.fn();
+const observers: Array<{
+  callback: IntersectionObserverCallback;
+  observe: jest.Mock;
+  disconnect: jest.Mock;
+  options?: IntersectionObserverInit;
+}> = [];
+const resourceCalls = () =>
+  (fetch as jest.Mock).mock.calls.filter(([url]) =>
+    String(url).startsWith('/api/kids?')
+  );
+
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
   useSearchParams: () => new URLSearchParams(query),
@@ -56,6 +69,17 @@ const variants = [
 beforeEach(() => {
   query = 'kind=tv';
   replace.mockClear();
+  observers.length = 0;
+  global.IntersectionObserver = jest.fn((callback, options) => {
+    const observer = {
+      callback,
+      options,
+      observe: jest.fn(),
+      disconnect: jest.fn(),
+    };
+    observers.push(observer);
+    return observer;
+  }) as unknown as typeof IntersectionObserver;
   global.fetch = jest.fn(async (input) => {
     const url = new URL(String(input), 'https://test.local');
     return {
@@ -205,10 +229,66 @@ it('keeps seasons in the version picker instead of repeating the same language p
     render(<KidsPage />);
   });
   expect(
-    screen.getAllByRole('button', { name: /^选择 .* · 英语$/ })
+    await screen.findAllByRole('button', { name: /^选择 .* · 英语$/ })
   ).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: /^选择 .* · 英语$/ }));
   expect(
     screen.getByRole('button', { name: '英语 · 第2季' })
   ).toBeInTheDocument();
+});
+
+it('keeps search without parent or rediscovery sections', async () => {
+  render(<KidsPage />);
+  expect(screen.getByRole('textbox', { name: '搜索动画' })).toBeInTheDocument();
+  expect(screen.queryByText('家长入口')).toBeNull();
+  expect(screen.queryByText('再找找其他动画')).toBeNull();
+});
+
+it('loads 25 titles first, then appends the remaining titles when the sentinel is visible', async () => {
+  render(<KidsPage />);
+  await waitFor(() => expect(resourceCalls()).toHaveLength(25));
+  await waitFor(() =>
+    expect(
+      observers.some((observer) => observer.observe.mock.calls.length)
+    ).toBe(true)
+  );
+  const observer = [...observers]
+    .reverse()
+    .find((item) => item.observe.mock.calls.length);
+  if (!observer) throw new Error('Missing pagination observer');
+  expect(observer.options).toEqual({ threshold: 0.1 });
+  expect(observer.observe.mock.calls[0][0]).toHaveAttribute(
+    'aria-label',
+    '加载更多动画'
+  );
+  act(() => {
+    observer.callback(
+      [{ isIntersecting: true } as IntersectionObserverEntry],
+      {} as IntersectionObserver
+    );
+  });
+  const titles = KIDS_TITLES.filter((item) => item.kind === 'tv');
+  await waitFor(() => expect(resourceCalls()).toHaveLength(titles.length));
+  expect(
+    new Set(
+      resourceCalls().map(([url]) =>
+        new URL(url, 'https://test.local').searchParams.get('id')
+      )
+    ).size
+  ).toBe(titles.length);
+  expect(observer.disconnect).toHaveBeenCalled();
+});
+
+it('debounces search and only discovers titles matching the latest query', async () => {
+  render(<KidsPage />);
+  const input = screen.getByRole('textbox', { name: '搜索动画' });
+  fireEvent.change(input, { target: { value: '花园' } });
+  fireEvent.change(input, { target: { value: '佩奇' } });
+  await screen.findByRole('button', {
+    name: '选择 小猪佩奇 第一季 英语版 · 英语',
+  });
+  expect(resourceCalls()).toHaveLength(1);
+  expect(String(resourceCalls()[0][0])).toContain('id=peppa');
+  fireEvent.click(screen.getByRole('button', { name: '清除搜索' }));
+  await waitFor(() => expect(resourceCalls()).toHaveLength(25));
 });
