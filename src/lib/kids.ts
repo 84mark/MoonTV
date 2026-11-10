@@ -456,7 +456,7 @@ export function kidsDetailHref(item: KidsTitle, age: KidsAgeGroup): string {
     returnTo: `/kids?age=${age}`,
   });
   if (item.year) params.set('year', item.year);
-  return `/detail?${params}`;
+  return `/play?${params}`;
 }
 
 export type KidsKind = 'tv' | 'movie';

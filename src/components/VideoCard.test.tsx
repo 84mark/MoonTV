@@ -82,7 +82,7 @@ it('leaves non-Douban posters alone and still supports custom image proxies', ()
   );
 });
 
-it('opens the details page with the existing Douban identity instead of autoplaying', () => {
+it('opens the player directly with the existing Douban identity', () => {
   render(
     <VideoCard
       from='douban'
@@ -93,14 +93,12 @@ it('opens the details page with the existing Douban identity instead of autoplay
       type='movie'
     />
   );
-  fireEvent.click(
-    screen.getByRole('link', { name: /查看 肖申克的救赎 的详情/ })
-  );
+  fireEvent.click(screen.getByRole('link', { name: /播放 肖申克的救赎/ }));
   const url = new URL(
     mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
     'https://example.test'
   );
-  expect(url.pathname).toBe('/detail');
+  expect(url.pathname).toBe('/play');
   expect(url.searchParams.get('douban_id')).toBe('1292052');
   expect(url.searchParams.get('title')).toBe('肖申克的救赎');
   expect(url.searchParams.get('stype')).toBe('movie');
@@ -117,9 +115,7 @@ it('carries the Douban TV type separately without restricting variety-show playb
       doubanType='tv'
     />
   );
-  fireEvent.click(
-    screen.getByRole('link', { name: /查看 现在就出发 第四季 的详情/ })
-  );
+  fireEvent.click(screen.getByRole('link', { name: /播放 现在就出发 第四季/ }));
   const url = new URL(
     mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
     'https://example.test'
@@ -129,11 +125,11 @@ it('carries the Douban TV type separately without restricting variety-show playb
 });
 
 it.each(['movie', 'tv', 'show'])(
-  'carries the originating %s menu into detail navigation',
+  'carries the originating %s menu into playback navigation',
   (type) => {
     window.history.replaceState({}, '', `/douban?type=${type}`);
     render(<VideoCard from='douban' title='剧集' poster={poster} />);
-    fireEvent.click(screen.getByRole('link', { name: /查看 剧集 的详情/ }));
+    fireEvent.click(screen.getByRole('link', { name: /播放 剧集/ }));
     const url = new URL(
       mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
       'https://example.test'
@@ -157,16 +153,15 @@ it('keeps the saved children language when reopening a continue-watching card', 
       kidsLanguage='multi:en+zh-CN'
     />
   );
-  fireEvent.click(
-    screen.getByRole('link', { name: '查看 小猪佩奇 第一季 的详情' })
-  );
+  fireEvent.click(screen.getByRole('link', { name: '播放 小猪佩奇 第一季' }));
   const url = new URL(
     mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
     'https://example.test'
   );
-  expect(url.pathname).toBe('/detail');
+  expect(url.pathname).toBe('/play');
   expect(url.searchParams.get('source')).toBe('family');
   expect(url.searchParams.get('id')).toBe('english-1');
+  expect(url.searchParams.get('episode')).toBe('3');
   expect(url.searchParams.get('kids_id')).toBe('peppa');
   expect(url.searchParams.get('kids_language')).toBe('multi:en+zh-CN');
 });
@@ -180,13 +175,41 @@ it('preserves the kids catalogue constraint without inventing an audio language'
       kidsId='insideout'
     />
   );
-  fireEvent.click(screen.getByRole('link', { name: '查看 头脑特工队 的详情' }));
+  fireEvent.click(screen.getByRole('link', { name: '播放 头脑特工队' }));
   const url = new URL(
     mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
     'https://example.test'
   );
-  expect(url.pathname).toBe('/detail');
+  expect(url.pathname).toBe('/play');
   expect(url.searchParams.get('kids_id')).toBe('insideout');
   expect(url.searchParams.has('kids_language')).toBe(false);
   expect(url.searchParams.get('stype')).toBe('movie');
 });
+
+it.each(['favorite', 'search'] as const)(
+  'opens %s cards directly in the player and preserves source identifiers',
+  (from) => {
+    render(
+      <VideoCard
+        from={from}
+        title='电影 & 特别篇'
+        source='source-key'
+        id='one&two'
+        year='2026'
+        type='movie'
+        query='电影'
+      />
+    );
+    fireEvent.click(screen.getByRole('link', { name: '播放 电影 & 特别篇' }));
+    const url = new URL(
+      mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
+      'https://example.test'
+    );
+    expect(url.pathname).toBe('/play');
+    expect(url.searchParams.get('source')).toBe('source-key');
+    expect(url.searchParams.get('id')).toBe('one&two');
+    expect(url.searchParams.get('title')).toBe('电影 & 特别篇');
+    expect(url.searchParams.get('year')).toBe('2026');
+    expect(url.searchParams.get('stitle')).toBe('电影');
+  }
+);

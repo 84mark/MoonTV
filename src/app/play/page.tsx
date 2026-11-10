@@ -38,9 +38,7 @@ import { qualityForWidth, VideoProbeResult } from '@/lib/video-probe';
 import DoubanComments from '@/components/DoubanComments';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
-import PlaybackStartup, {
-  usePlaybackStartup,
-} from '@/components/PlaybackStartup';
+import { usePlaybackStartup } from '@/components/PlaybackStartup';
 import PlaybackStats from '@/components/PlaybackStats';
 
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
@@ -226,19 +224,107 @@ function PlayPageClient() {
     }
   }, [error]);
 
+  const [playbackFailure, setPlaybackFailure] = useState(false);
+  const [playbackError, setPlaybackError] = useState('');
+  const [playbackRetry, setPlaybackRetry] = useState(0);
+  const availableSourcesRef = useRef(availableSources);
+  availableSourcesRef.current = availableSources;
+  const attemptedSources = useRef(new Set<string>());
+  const attemptedUrls = useRef(new Set<string>());
+  const installedSourceKey = useRef('');
+  const startedSources = useRef(new Set<string>());
+  const playbackMounted = useRef(true);
+  const sourceAttemptKey = () =>
+    `${currentEpisodeIndexRef.current}:${currentSourceRef.current}:${currentIdRef.current}`;
+  const reportPlaybackFailure = (expectedKey = installedSourceKey.current) => {
+    if (!playbackMounted.current || expectedKey !== sourceAttemptKey()) return;
+    attemptedSources.current.add(expectedKey);
+    attemptedUrls.current.add(
+      `${currentEpisodeIndexRef.current}:${
+        detailRef.current?.episodes[currentEpisodeIndexRef.current] || ''
+      }`
+    );
+    setPlaybackFailure(true);
+  };
+  useEffect(() => {
+    playbackMounted.current = true;
+    return () => {
+      playbackMounted.current = false;
+      artPlayerRef.current?.destroy();
+      artPlayerRef.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    setPlaybackFailure(false);
+    setPlaybackError('');
+    attemptedSources.current.clear();
+    attemptedUrls.current.clear();
+  }, [currentEpisodeIndex]);
+  useEffect(() => {
+    if (!playbackFailure) return;
+    const index = currentEpisodeIndexRef.current;
+    const next = availableSourcesRef.current.find(
+      (source) =>
+        source.episodes?.[index] &&
+        kidsPlaybackMatches(searchParams, source) &&
+        !attemptedSources.current.has(
+          `${index}:${source.source}:${source.id}`
+        ) &&
+        !attemptedUrls.current.has(`${index}:${source.episodes[index]}`)
+    );
+    if (!next) {
+      if (!sourceSearchLoading) {
+        setIsVideoLoading(false);
+        setPlaybackError('当前线路暂时无法播放，请更换片源或重试。');
+      }
+      return;
+    }
+    const time = artPlayerRef.current?.currentTime;
+    if (Number.isFinite(time) && time > 0) resumeTimeRef.current = time;
+    setPlaybackFailure(false);
+    setPlaybackError('');
+    setVideoLoadingStage('sourceChanging');
+    setIsVideoLoading(true);
+    currentSourceRef.current = next.source;
+    currentIdRef.current = next.id;
+    detailRef.current = next;
+    setCurrentSource(next.source);
+    setCurrentId(next.id);
+    setVideoTitle(next.title);
+    setVideoYear(next.year);
+    setVideoCover(next.poster);
+    setDetail(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set('source', next.source);
+    url.searchParams.set('id', next.id);
+    window.history.replaceState(window.history.state, '', url.toString());
+  }, [playbackFailure, availableSources, sourceSearchLoading]);
+  useEffect(() => {
+    if (loading || !videoUrl) return;
+    const key = sourceAttemptKey();
+    startedSources.current.delete(key);
+    const timer = setTimeout(() => {
+      if (!startedSources.current.has(key) && key === sourceAttemptKey())
+        reportPlaybackFailure();
+    }, 12000);
+    return () => clearTimeout(timer);
+  }, [loading, videoUrl, playbackRetry]);
+
   // -----------------------------------------------------------------------------
   // 工具函数（Utils）
   // -----------------------------------------------------------------------------
 
   // 播放源优选函数
   const preferBestSource = async (
-    sources: SearchResult[]
+    sources: SearchResult[],
+    active: () => boolean = () => true
   ): Promise<SearchResult | null> => {
     const index = currentEpisodeIndexRef.current;
     return firstMeasuredSource(
       sources,
       (url) => getVideoResolutionFromM3u8(url),
       (source, result) => {
+        if (!active() || currentEpisodeIndexRef.current !== index) return;
         setMeasuredEpisodeIndex(index);
         setPrecomputedVideoInfo((previous) =>
           new Map(previous).set(`${source.source}-${source.id}`, result)
@@ -445,116 +531,83 @@ function PlayPageClient() {
     updateVideoUrl(detail, currentEpisodeIndex);
   }, [detail, currentEpisodeIndex]);
 
-  // 进入页面时直接获取全部源信息
+  // Start the selected source immediately; discovery and measurements never gate playback.
   useEffect(() => {
-    const fetchSourceDetail = async (
-      source: string,
-      id: string
-    ): Promise<SearchResult[]> => {
-      try {
-        const detailResponse = await fetch(
-          `/api/detail?source=${source}&id=${id}`,
-          { cache: 'no-store' }
-        );
-        if (!detailResponse.ok) {
-          throw new Error('获取视频详情失败');
-        }
-        const detailData = (await detailResponse.json()) as SearchResult;
-        if (!kidsPlaybackMatches(searchParams, detailData))
-          throw new Error('所选语言或季数暂无可用片源');
-        setAvailableSources([detailData]);
-        return [detailData];
-      } catch (err) {
-        console.error('获取视频详情失败:', err);
-        return [];
-      } finally {
-        setSourceSearchLoading(false);
-      }
-    };
-    const fetchSourcesData = async (query: string): Promise<SearchResult[]> => {
-      // 根据搜索词获取全部源信息
+    const controller = new AbortController();
+    const active = () => !controller.signal.aborted;
+    const validSource = (source: SearchResult) =>
+      source &&
+      typeof source.title === 'string' &&
+      Array.isArray(source.episodes) &&
+      source.episodes.length > 0 &&
+      kidsPlaybackMatches(searchParams, source);
+    const fetchSourceDetail = async (): Promise<SearchResult[]> => {
       try {
         const response = await fetch(
-          `/api/search?q=${encodeURIComponent(query.trim())}`,
-          { cache: 'no-store' }
+          `/api/detail?${new URLSearchParams({
+            source: currentSource,
+            id: currentId,
+          })}`,
+          { cache: 'no-store', signal: controller.signal }
         );
-        if (!response.ok) {
-          throw new Error('搜索失败');
-        }
-        const data = await response.json();
-
-        // 处理搜索结果，根据规则过滤
-        const results = data.results.filter(
-          (result: SearchResult) =>
-            (searchParams.get('kids_id')
-              ? kidsPlaybackMatches(searchParams, result)
-              : result.title.replaceAll(' ', '').toLowerCase() ===
-                videoTitleRef.current.replaceAll(' ', '').toLowerCase()) &&
-            (videoYearRef.current
-              ? result.year.toLowerCase() === videoYearRef.current.toLowerCase()
-              : true) &&
-            (searchType
-              ? (searchType === 'tv' && result.episodes.length > 1) ||
-                (searchType === 'movie' && result.episodes.length === 1)
-              : true)
-        );
-        setAvailableSources(results);
-        return results;
-      } catch (err) {
-        setSourceSearchError(err instanceof Error ? err.message : '搜索失败');
-        setAvailableSources([]);
+        if (!response.ok) return [];
+        const source = await response.json();
+        return validSource(source) ? [source] : [];
+      } catch {
         return [];
-      } finally {
-        setSourceSearchLoading(false);
       }
     };
-
+    const fetchSourcesData = async (): Promise<SearchResult[]> => {
+      try {
+        const response = await fetch(
+          `/api/search?q=${encodeURIComponent(
+            (searchTitle || videoTitle).trim()
+          )}`,
+          { cache: 'no-store', signal: controller.signal }
+        );
+        if (!response.ok) throw new Error('搜索失败');
+        const data = await response.json();
+        if (!Array.isArray(data.results)) throw new Error('搜索结果无效');
+        return data.results.filter(
+          (source: SearchResult) =>
+            validSource(source) &&
+            (searchParams.has('kids_id') ||
+              source.title.replaceAll(' ', '').toLowerCase() ===
+                videoTitle.replaceAll(' ', '').toLowerCase()) &&
+            (!videoYear || source.year === videoYear) &&
+            (!searchType ||
+              (searchType === 'movie'
+                ? source.episodes.length === 1
+                : source.episodes.length > 1))
+        );
+      } catch (err) {
+        if (active())
+          setSourceSearchError(err instanceof Error ? err.message : '搜索失败');
+        return [];
+      }
+    };
     const initAll = async () => {
       if (!currentSource && !currentId && !videoTitle && !searchTitle) {
         setError('缺少必要参数');
         setLoading(false);
         return;
       }
-      setLoading(true);
-      setLoadingStage(currentSource && currentId ? 'fetching' : 'searching');
-      setLoadingMessage(
-        currentSource && currentId
-          ? '🎬 正在获取视频详情...'
-          : '🔍 正在搜索播放源...'
-      );
-
+      setLoadingMessage('正在加载视频…');
       startup.mark('读取观看记录');
-      // Resolve legacy source-specific records before probing or creating the player.
-      let records: Awaited<ReturnType<typeof getAllPlayRecords>> = {};
-      try {
-        records = await getAllPlayRecords();
-      } catch {
-        /* Cookie resume still works offline. */
+      const historyRequest = getAllPlayRecords().catch(
+        (): Awaited<ReturnType<typeof getAllPlayRecords>> => ({})
+      );
+      const prepared = getPreparedPlayback(searchParams.get('preload'));
+      let sourcesInfo = prepared?.snapshot.sources.filter(validSource) || [];
+      let discoverAfterStart = false;
+      if (!sourcesInfo.length && currentSource && currentId) {
+        sourcesInfo = await fetchSourceDetail();
+        discoverAfterStart = sourcesInfo.length > 0;
       }
-      const candidate = getPreparedPlayback(searchParams.get('preload'));
-      const prepared = candidate;
-      let sourcesInfo: SearchResult[];
-      if (prepared && prepared.snapshot.sources.length > 0) {
-        sourcesInfo = prepared.snapshot.sources.filter((source) =>
-          kidsPlaybackMatches(searchParams, source)
-        );
-        setAvailableSources(sourcesInfo);
-        setSourceSearchLoading(false);
-      } else {
-        startup.mark('查找播放源');
-        sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
-      }
-      if (
-        currentSource &&
-        currentId &&
-        !sourcesInfo.some(
-          (source) => source.source === currentSource && source.id === currentId
-        )
-      ) {
-        startup.mark('获取片源详情');
-        sourcesInfo = await fetchSourceDetail(currentSource, currentId);
-      }
-      if (sourcesInfo.length === 0) {
+      if (!sourcesInfo.length) sourcesInfo = await fetchSourcesData();
+      const records = await historyRequest;
+      if (!active()) return;
+      if (!sourcesInfo.length) {
         setError(
           searchParams.has('kids_id')
             ? '所选语言或季数暂无可用片源，请返回选择其他版本。'
@@ -563,7 +616,7 @@ function PlayPageClient() {
         setLoading(false);
         return;
       }
-
+      setAvailableSources(sourcesInfo);
       if (
         !searchParams.has('episode') &&
         storedEpisode(videoTitle, videoYear) === undefined
@@ -583,43 +636,14 @@ function PlayPageClient() {
         setPrecomputedVideoInfo(new Map(prepared.snapshot.results));
         setMeasuredEpisodeIndex(currentEpisodeIndexRef.current);
       }
-      let detailData: SearchResult = sourcesInfo[0];
-      // 指定源和id且无需优选
-      if (currentSource && currentId && !needPreferRef.current) {
-        const target = sourcesInfo.find(
+      const detailData =
+        sourcesInfo.find(
           (source) => source.source === currentSource && source.id === currentId
-        );
-        if (target) {
-          detailData = target;
-        } else {
-          setError('未找到匹配结果');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 未指定源和 id 或需要优选，且开启优选开关
-      if (
-        (!currentSource || !currentId || needPreferRef.current) &&
-        optimizationEnabled
-      ) {
-        setLoadingStage('preferring');
-        setLoadingMessage(
-          `⚡ 正在检测第 ${
-            currentEpisodeIndexRef.current + 1
-          } 集，找到可播放片源后立即开始...`
-        );
-
-        startup.mark('检测当前集可用片源');
-        const preferred = await preferBestSource(sourcesInfo);
-        if (!preferred) {
-          setError('当前所有源均不可用');
-          setLoading(false);
-          return;
-        }
-        detailData = preferred;
-      }
-
+        ) ||
+        sourcesInfo.find(
+          (source) => source.episodes[currentEpisodeIndexRef.current]
+        ) ||
+        sourcesInfo[0];
       const history = findPlayRecord(records, {
         title: detailData.title,
         year: detailData.year,
@@ -627,13 +651,11 @@ function PlayPageClient() {
       });
       if (history?.index === currentEpisodeIndexRef.current + 1)
         resumeTimeRef.current = history.play_time;
-      console.log(detailData.source, detailData.id);
-
       setNeedPrefer(false);
       setCurrentSource(detailData.source);
       setCurrentId(detailData.id);
       setVideoYear(detailData.year);
-      setVideoTitle(detailData.title || videoTitleRef.current);
+      setVideoTitle(detailData.title || videoTitle);
       setVideoCover(detailData.poster);
       setDetail(detailData);
       if (currentEpisodeIndexRef.current >= detailData.episodes.length) {
@@ -641,8 +663,6 @@ function PlayPageClient() {
         resumeTimeRef.current = null;
         setCurrentEpisodeIndex(0);
       }
-
-      // 规范URL参数
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.set('source', detailData.source);
       newUrl.searchParams.set('id', detailData.id);
@@ -650,15 +670,34 @@ function PlayPageClient() {
       newUrl.searchParams.set('title', detailData.title);
       newUrl.searchParams.delete('prefer');
       window.history.replaceState(window.history.state, '', newUrl.toString());
-
       startup.mark('创建播放器');
       setLoadingStage('ready');
-      setLoadingMessage('✨ 准备就绪，即将开始播放...');
-
       setLoading(false);
+      const shouldMeasure =
+        optimizationEnabled &&
+        (!currentSource || !currentId || needPreferRef.current);
+      if (discoverAfterStart) {
+        setSourceSearchLoading(true);
+        void fetchSourcesData().then((results) => {
+          if (!active()) return;
+          const merged = [
+            detailData,
+            ...results.filter(
+              (source) =>
+                source.source !== detailData.source ||
+                source.id !== detailData.id
+            ),
+          ];
+          setAvailableSources(merged);
+          setSourceSearchLoading(false);
+          if (shouldMeasure) void preferBestSource(merged, active);
+        });
+      } else if (shouldMeasure) {
+        void preferBestSource(sourcesInfo, active);
+      }
     };
-
-    initAll();
+    void initAll();
+    return () => controller.abort();
   }, []);
 
   // 跳过片头片尾配置处理
@@ -680,13 +719,21 @@ function PlayPageClient() {
     initSkipConfig();
   }, []);
 
+  const sourceChangeVersion = useRef(0);
   // 处理换源
   const handleSourceChange = async (
     newSource: string,
     newId: string,
     newTitle: string
   ) => {
+    const version = ++sourceChangeVersion.current;
+    const requestedIndex = currentEpisodeIndexRef.current;
     try {
+      setPlaybackFailure(false);
+      setPlaybackError('');
+      attemptedSources.current.delete(
+        `${currentEpisodeIndexRef.current}:${newSource}:${newId}`
+      );
       // 显示换源加载状态
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
@@ -721,6 +768,12 @@ function PlayPageClient() {
         }
       }
 
+      if (
+        !playbackMounted.current ||
+        version !== sourceChangeVersion.current ||
+        requestedIndex !== currentEpisodeIndexRef.current
+      )
+        return;
       const newDetail = availableSources.find(
         (source) => source.source === newSource && source.id === newId
       );
@@ -785,6 +838,9 @@ function PlayPageClient() {
   // 处理集数切换
   const handleEpisodeChange = (episodeNumber: number) => {
     if (episodeNumber >= 0 && episodeNumber < totalEpisodes) {
+      sourceChangeVersion.current++;
+      setPlaybackFailure(false);
+      setPlaybackError('');
       // 在更换集数前保存当前播放进度
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
@@ -1108,6 +1164,7 @@ function PlayPageClient() {
     downloadMeter.reset();
     // 非WebKit浏览器且播放器已存在，使用switch方法切换
     if (!isWebkit && artPlayerRef.current) {
+      installedSourceKey.current = sourceAttemptKey();
       artPlayerRef.current.switch = videoUrl;
       artPlayerRef.current.title = `${videoTitle} - 第${
         currentEpisodeIndex + 1
@@ -1138,6 +1195,7 @@ function PlayPageClient() {
       Artplayer.USE_RAF = true;
 
       startup.mark('加载播放列表');
+      installedSourceKey.current = sourceAttemptKey();
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
         url: videoUrl,
@@ -1225,9 +1283,18 @@ function PlayPageClient() {
 
             ensureVideoSource(video, url);
 
+            const hlsSourceKey = installedSourceKey.current;
+            let recoveryAttempted = false;
             hls.on(Hls.Events.ERROR, function (event: any, data: any) {
               console.error('HLS Error:', event, data);
               if (data.fatal) {
+                if (!playbackMounted.current || video.hls !== hls) return;
+                if (recoveryAttempted) {
+                  hls.stopLoad();
+                  reportPlaybackFailure(hlsSourceKey);
+                  return;
+                }
+                recoveryAttempted = true;
                 switch (data.type) {
                   case Hls.ErrorTypes.NETWORK_ERROR:
                     console.log('网络错误，尝试恢复...');
@@ -1240,6 +1307,7 @@ function PlayPageClient() {
                   default:
                     console.log('无法恢复的错误');
                     hls.destroy();
+                    reportPlaybackFailure(hlsSourceKey);
                     break;
                 }
               }
@@ -1364,6 +1432,10 @@ function PlayPageClient() {
         container: artPlayerRef.current.template.$player,
         video: artPlayerRef.current.video,
       });
+      artPlayerRef.current.on('video:loadeddata', () => {
+        if (playbackMounted.current)
+          startedSources.current.add(sourceAttemptKey());
+      });
       artPlayerRef.current.on('video:playing', () => {
         startup.mark('画面已播放');
         rememberEpisode(
@@ -1393,6 +1465,8 @@ function PlayPageClient() {
 
       // 监听视频可播放事件，这时恢复播放进度更可靠
       artPlayerRef.current.on('video:canplay', () => {
+        if (!playbackMounted.current || !artPlayerRef.current) return;
+        startedSources.current.add(sourceAttemptKey());
         const sourceKey = `${currentSourceRef.current}-${currentIdRef.current}`;
         const width = artPlayerRef.current.video.videoWidth;
         setPrecomputedVideoInfo((previous) => {
@@ -1424,7 +1498,10 @@ function PlayPageClient() {
         }
         resumeTimeRef.current = null;
 
+        const readyPlayer = artPlayerRef.current;
         setTimeout(() => {
+          if (!playbackMounted.current || artPlayerRef.current !== readyPlayer)
+            return;
           if (
             Math.abs(artPlayerRef.current.volume - lastVolumeRef.current) > 0.01
           ) {
@@ -1489,19 +1566,28 @@ function PlayPageClient() {
         }
       });
 
-      artPlayerRef.current.on('error', (err: any) => {
-        console.error('播放器错误:', err);
-        if (artPlayerRef.current.currentTime > 0) {
-          return;
-        }
+      artPlayerRef.current.on('video:loadeddata', () => {
+        if (playbackMounted.current)
+          startedSources.current.add(sourceAttemptKey());
       });
+      artPlayerRef.current.on('video:playing', () => {
+        if (!playbackMounted.current) return;
+        startedSources.current.add(sourceAttemptKey());
+        setPlaybackError('');
+        setIsVideoLoading(false);
+      });
+      artPlayerRef.current.on('video:error', () => reportPlaybackFailure());
+      artPlayerRef.current.on('error', () => reportPlaybackFailure());
 
       // 监听视频播放结束事件，自动播放下一集
       artPlayerRef.current.on('video:ended', () => {
         const d = detailRef.current;
         const idx = currentEpisodeIndexRef.current;
         if (d && d.episodes && idx < d.episodes.length - 1) {
+          const endedSource = sourceAttemptKey();
           setTimeout(() => {
+            if (!playbackMounted.current || sourceAttemptKey() !== endedSource)
+              return;
             setCurrentEpisodeIndex(idx + 1);
           }, 1000);
         }
@@ -1536,25 +1622,7 @@ function PlayPageClient() {
       console.error('创建播放器失败:', err);
       setError('播放器初始化失败');
     }
-  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
-
-  if (loading) {
-    return (
-      <PageLayout activePath='/play'>
-        <div className='flex min-h-[75vh] items-center justify-center px-5'>
-          <div className='glass-panel w-full max-w-sm px-8 py-10 text-center'>
-            <div className='mx-auto mb-6 h-9 w-9 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-blue-900 dark:border-t-blue-400' />
-            <p role='status' className='text-base font-medium'>
-              {loadingMessage.replace(/🎬|🔍|⚡|✨/g, '').trim()}
-            </p>
-            <div className='mt-5 text-left'>
-              <PlaybackStartup steps={startup.steps} />
-            </div>
-          </div>
-        </div>
-      </PageLayout>
-    );
-  }
+  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled, playbackRetry]);
 
   if (error === '当前所有源均不可用') {
     return (
@@ -1611,11 +1679,14 @@ function PlayPageClient() {
   }
 
   return (
-    <PageLayout activePath='/play'>
-      <div className='playback-page flex flex-col gap-5 py-7 px-4 lg:px-[2rem] 2xl:px-12'>
-        {/* 第一行：影片标题 */}
-        <div className='py-1'>
-          <h1 className='text-xl font-semibold text-gray-900 dark:text-gray-100'>
+    <PageLayout
+      activePath='/play'
+      playbackHeader={
+        <div className='flex min-w-0 items-center gap-2'>
+          <h1
+            title={videoTitle}
+            className='min-w-0 flex-1 font-semibold text-gray-900 dark:text-gray-100'
+          >
             {videoTitle || '影片标题'}
             {totalEpisodes > 1 && (
               <span className='text-gray-500 dark:text-gray-400'>
@@ -1626,7 +1697,7 @@ function PlayPageClient() {
           {searchParams.has('kids_id') && (
             <span
               aria-label='播放语言'
-              className='mt-2 inline-flex rounded-full bg-sky-100 px-3 py-1 text-sm font-semibold text-sky-700 dark:bg-sky-900/50 dark:text-sky-200'
+              className='max-w-[80px] shrink-0 truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-900/50 dark:text-sky-200'
             >
               {(() => {
                 const language = kidsLanguage(
@@ -1642,51 +1713,22 @@ function PlayPageClient() {
               })()}
             </span>
           )}
+          <button
+            onClick={() =>
+              setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
+            }
+            aria-expanded={!isEpisodeSelectorCollapsed}
+            title={isEpisodeSelectorCollapsed ? '显示选集面板' : '隐藏选集面板'}
+            className='hidden h-8 shrink-0 items-center rounded-lg px-2 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 lg:inline-flex'
+          >
+            {isEpisodeSelectorCollapsed ? '显示选集' : '隐藏选集'}
+          </button>
         </div>
-        <PlaybackStartup steps={startup.steps} />
+      }
+    >
+      <div className='playback-page flex flex-col gap-5 py-7 px-4 lg:px-[2rem] 2xl:px-12'>
         {/* 第二行：播放器和选集 */}
         <div className='space-y-2'>
-          {/* 折叠控制 - 仅在 lg 及以上屏幕显示 */}
-          <div className='hidden lg:flex justify-end'>
-            <button
-              onClick={() =>
-                setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
-              }
-              className='group relative flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white dark:bg-gray-800/80 dark:hover:bg-gray-800 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all duration-200'
-              title={
-                isEpisodeSelectorCollapsed ? '显示选集面板' : '隐藏选集面板'
-              }
-            >
-              <svg
-                className={`w-3.5 h-3.5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
-                  isEpisodeSelectorCollapsed ? 'rotate-180' : 'rotate-0'
-                }`}
-                fill='none'
-                stroke='currentColor'
-                viewBox='0 0 24 24'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth='2'
-                  d='M9 5l7 7-7 7'
-                />
-              </svg>
-              <span className='text-xs font-medium text-gray-600 dark:text-gray-300'>
-                {isEpisodeSelectorCollapsed ? '显示' : '隐藏'}
-              </span>
-
-              {/* 精致的状态指示点 */}
-              <div
-                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-all duration-200 ${
-                  isEpisodeSelectorCollapsed
-                    ? 'bg-orange-400 animate-pulse'
-                    : 'bg-blue-400'
-                }`}
-              ></div>
-            </button>
-          </div>
-
           <div
             className={`grid gap-4 lg:h-[500px] xl:h-[650px] 2xl:h-[750px] transition-all duration-300 ease-in-out ${
               isEpisodeSelectorCollapsed
@@ -1701,7 +1743,11 @@ function PlayPageClient() {
               }`}
             >
               <div className='relative w-full h-[300px] lg:h-full'>
-                <div ref={artRef} className='player-frame w-full h-full'></div>
+                <div
+                  ref={artRef}
+                  aria-label='视频播放器'
+                  className='player-frame w-full h-full bg-black'
+                ></div>
 
                 {statsTarget && (
                   <PlaybackStats
@@ -1714,41 +1760,35 @@ function PlayPageClient() {
                   />
                 )}
 
-                {/* 换源加载蒙层 */}
-                {isVideoLoading && (
-                  <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl flex items-center justify-center z-[500] transition-all duration-300'>
-                    <div className='text-center max-w-md mx-auto px-6'>
-                      {/* 动画影院图标 */}
-                      <div className='relative mb-8'>
-                        <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
-                          <div className='text-white text-4xl'>🎬</div>
-                          {/* 旋转光环 */}
-                          <div className='absolute -inset-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl opacity-20 animate-spin'></div>
-                        </div>
-
-                        {/* 浮动粒子效果 */}
-                        <div className='absolute top-0 left-0 w-full h-full pointer-events-none'>
-                          <div className='absolute top-2 left-2 w-2 h-2 bg-blue-400 rounded-full animate-bounce'></div>
-                          <div
-                            className='absolute top-4 right-4 w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce'
-                            style={{ animationDelay: '0.5s' }}
-                          ></div>
-                          <div
-                            className='absolute bottom-3 left-6 w-1 h-1 bg-lime-400 rounded-full animate-bounce'
-                            style={{ animationDelay: '1s' }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {/* 换源消息 */}
-                      <div className='space-y-2'>
-                        <p className='text-xl font-semibold text-white animate-pulse'>
-                          {videoLoadingStage === 'sourceChanging'
-                            ? '🔄 切换播放源...'
-                            : '🔄 视频加载中...'}
-                        </p>
-                      </div>
-                    </div>
+                {playbackError && (
+                  <div className='absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/85 p-5 text-white'>
+                    <p role='alert'>{playbackError}</p>
+                    <button
+                      className='rounded-lg bg-blue-600 px-4 py-2 text-sm'
+                      onClick={() => {
+                        attemptedSources.current.clear();
+                        attemptedUrls.current.clear();
+                        setPlaybackFailure(false);
+                        setPlaybackError('');
+                        setIsVideoLoading(true);
+                        artPlayerRef.current?.destroy();
+                        artPlayerRef.current = null;
+                        setPlaybackRetry((value) => value + 1);
+                      }}
+                    >
+                      重新播放
+                    </button>
+                  </div>
+                )}
+                {(loading || isVideoLoading) && (
+                  <div className='pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-black/80'>
+                    <p role='status' className='text-sm text-white'>
+                      {loading
+                        ? loadingMessage
+                        : videoLoadingStage === 'sourceChanging'
+                        ? '正在切换片源…'
+                        : '正在加载视频…'}
+                    </p>
                   </div>
                 )}
               </div>

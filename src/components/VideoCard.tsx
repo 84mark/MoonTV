@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { CheckCircle, Heart, Info, Link } from 'lucide-react';
+import { CheckCircle, Heart, Link, Play } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -214,47 +214,38 @@ export default function VideoCard({
     const contentKind =
       doubanType ||
       (actualSearchType === 'tv' || (actualEpisodes || 0) > 1 ? 'tv' : 'movie');
-    const returnQuery = `&returnTo=${encodeURIComponent(
-      window.location.pathname + window.location.search + window.location.hash
-    )}`;
-    const doubanQuery = /^\d{5,12}$/.test(actualDoubanId)
-      ? `&douban_id=${actualDoubanId}&douban_type=${contentKind}`
-      : '';
-    const kidsQuery = kidsId
-      ? `&${new URLSearchParams({
-          kids_id: kidsId,
-          ...(kidsLanguage ? { kids_language: kidsLanguage } : {}),
-        })}`
-      : '';
-    if (from === 'douban') {
-      router.push(
-        `/detail?title=${encodeURIComponent(actualTitle.trim())}${
-          actualSource && actualId
-            ? `&${new URLSearchParams({ source: actualSource, id: actualId })}`
-            : ''
-        }${actualYear ? `&year=${actualYear}` : ''}${
-          actualSearchType ? `&stype=${actualSearchType}` : ''
-        }${
-          actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''
-        }${doubanQuery}&poster=${encodeURIComponent(
-          actualPoster || ''
-        )}${returnQuery}${kidsQuery}`
-      );
-    } else if (actualSource && actualId) {
-      router.push(
-        `/detail?source=${actualSource}&id=${actualId}&title=${encodeURIComponent(
-          actualTitle
-        )}${actualYear ? `&year=${actualYear}` : ''}${
-          isAggregate ? '&prefer=true' : ''
-        }${
-          actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''
-        }${
-          actualSearchType ? `&stype=${actualSearchType}` : ''
-        }${doubanQuery}&poster=${encodeURIComponent(
-          actualPoster || ''
-        )}${returnQuery}${kidsQuery}`
-      );
+    if (from !== 'douban' && (!actualSource || !actualId)) return;
+    const params = new URLSearchParams({
+      title: actualTitle.trim(),
+      poster: actualPoster || '',
+      returnTo:
+        window.location.pathname +
+        window.location.search +
+        window.location.hash,
+    });
+    if (actualSource && actualId) {
+      params.set('source', actualSource);
+      params.set('id', actualId);
     }
+    if (actualYear) params.set('year', actualYear);
+    if (actualSearchType) params.set('stype', actualSearchType);
+    if (actualQuery) params.set('stitle', actualQuery.trim());
+    if (isAggregate) params.set('prefer', 'true');
+    if (/^\d{5,12}$/.test(actualDoubanId)) {
+      params.set('douban_id', actualDoubanId);
+      params.set('douban_type', contentKind);
+    }
+    if (kidsId) {
+      params.set('kids_id', kidsId);
+      if (kidsLanguage) params.set('kids_language', kidsLanguage);
+    }
+    if (
+      from === 'playrecord' &&
+      Number.isSafeInteger(currentEpisode) &&
+      (currentEpisode || 0) > 0
+    )
+      params.set('episode', String(currentEpisode));
+    router.push(`/play?${params}`);
   }, [
     from,
     actualSource,
@@ -271,6 +262,7 @@ export default function VideoCard({
     actualEpisodes,
     kidsId,
     kidsLanguage,
+    currentEpisode,
   ]);
 
   const config = useMemo(() => {
@@ -321,7 +313,7 @@ export default function VideoCard({
       onClick={handleClick}
       role='link'
       tabIndex={0}
-      aria-label={`查看 ${actualTitle} 的详情`}
+      aria-label={`播放 ${actualTitle}`}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && event.key === 'Enter')
           handleClick();
@@ -349,10 +341,10 @@ export default function VideoCard({
         {/* 悬浮遮罩 */}
         <div className='absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 ease-in-out group-hover:opacity-100' />
 
-        {/* 详情入口 */}
+        {/* 播放入口 */}
         {config.showPlayButton && (
           <div className='absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-300 ease-in-out delay-75 group-hover:opacity-100 group-hover:scale-100'>
-            <Info
+            <Play
               size={50}
               strokeWidth={0.8}
               className='text-white fill-transparent transition-all duration-300 ease-out hover:fill-blue-500 hover:scale-[1.1]'

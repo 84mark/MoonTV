@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 import { getAllPlayRecords } from '@/lib/db.client';
@@ -12,6 +12,11 @@ jest.mock('@/lib/playback-preload', () => ({ getPreparedPlayback: jest.fn() }));
 
 let query = '';
 const mockPlayer = jest.fn();
+const mockPlayers: Array<{
+  handlers: Map<string, (event?: unknown) => void>;
+  switch?: string;
+  currentTime?: number;
+}> = [];
 jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(query),
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
@@ -21,16 +26,31 @@ jest.mock('artplayer', () => ({
   default: class {
     video = document.createElement('video');
     template = { $player: document.createElement('div') };
-    on = jest.fn();
+    handlers = new Map<string, (event?: unknown) => void>();
+    on = jest.fn((name: string, handler: (event?: unknown) => void) =>
+      this.handlers.set(name, handler)
+    );
     destroy = jest.fn();
     constructor(options: unknown) {
       mockPlayer(options);
+      mockPlayers.push(this);
     }
   },
 }));
 jest.mock('@/components/PageLayout', () => ({
   __esModule: true,
-  default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  default: ({
+    children,
+    playbackHeader,
+  }: {
+    children: ReactNode;
+    playbackHeader?: ReactNode;
+  }) => (
+    <div>
+      {playbackHeader}
+      {children}
+    </div>
+  ),
 }));
 jest.mock('@/components/DoubanComments', () => ({
   __esModule: true,
@@ -74,6 +94,7 @@ beforeEach(() => {
   document.cookie = 'moontv_episodes=; Max-Age=0; Path=/';
   localStorage.clear();
   mockPlayer.mockClear();
+  mockPlayers.length = 0;
   (getPreparedPlayback as jest.Mock).mockReturnValue(null);
   global.fetch = jest
     .fn()
@@ -240,4 +261,83 @@ it('refuses a mismatched language returned by a direct source fallback', async (
     await screen.findByText('所选语言或季数暂无可用片源，请返回选择其他版本。')
   ).toBeInTheDocument();
   expect(mockPlayer).not.toHaveBeenCalled();
+});
+
+it('shows the player frame immediately while discovery is still pending', async () => {
+  query = 'title=剧集&year=2026';
+  (fetch as jest.Mock).mockImplementation(() => new Promise(() => undefined));
+  render(<PlayPage />);
+  expect(screen.getByLabelText('视频播放器')).toBeInTheDocument();
+  expect(screen.queryByText(/正在检测第/)).toBeNull();
+});
+
+it('starts a supplied source before the background search and probes finish', async () => {
+  query = 'title=剧集&year=2026&source=a&id=1&episode=2&prefer=true';
+  (fetch as jest.Mock).mockImplementation(async (url: string) => {
+    if (url.startsWith('/api/detail?'))
+      return { ok: true, json: async () => a };
+    return new Promise(() => undefined);
+  });
+  (getVideoResolutionFromM3u8 as jest.Mock).mockImplementation(
+    () => new Promise(() => undefined)
+  );
+  render(<PlayPage />);
+  await waitFor(() =>
+    expect(mockPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'a2' })
+    )
+  );
+  expect(String((fetch as jest.Mock).mock.calls[0][0])).toContain(
+    '/api/detail?'
+  );
+});
+
+it('does not wait for or switch to a faster background measurement', async () => {
+  query = 'title=剧集&year=2026&episode=2';
+  let finish!: (value: unknown) => void;
+  (getVideoResolutionFromM3u8 as jest.Mock).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  render(<PlayPage />);
+  await waitFor(() =>
+    expect(mockPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'a2' })
+    )
+  );
+  await act(async () => {
+    finish({ quality: '1080p', loadSpeed: '20 MB/s', status: 'playable' });
+  });
+  expect(mockPlayer).toHaveBeenCalledTimes(1);
+  expect(mockPlayers[0].switch).toBeUndefined();
+});
+
+it('falls back after an actual player error, keeping the selected episode', async () => {
+  query = 'title=剧集&year=2026&episode=3';
+  render(<PlayPage />);
+  await waitFor(() => expect(mockPlayers).toHaveLength(1));
+  act(() => mockPlayers[0].handlers.get('video:error')?.(new Event('error')));
+  await waitFor(() => expect(mockPlayers[0].switch).toBe('b3'));
+  act(() => mockPlayers[0].handlers.get('video:error')?.(new Event('error')));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '当前线路暂时无法播放'
+  );
+  expect(mockPlayers[0].switch).toBe('b3');
+});
+
+it('does not treat a decoded video paused by autoplay policy as a failed source', async () => {
+  jest.useFakeTimers();
+  try {
+    query = 'title=剧集&year=2026&episode=2';
+    render(<PlayPage />);
+    await waitFor(() => expect(mockPlayers).toHaveLength(1));
+    act(() => mockPlayers[0].handlers.get('video:loadeddata')?.());
+    act(() => jest.advanceTimersByTime(13000));
+    expect(mockPlayers[0].switch).toBeUndefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
 });

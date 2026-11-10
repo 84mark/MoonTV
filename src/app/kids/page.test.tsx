@@ -29,7 +29,7 @@ jest.mock('@/components/PageLayout', () => ({
   __esModule: true,
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
-const cards = () => screen.getAllByRole('link', { name: /^查看 .* 的详情$/ });
+const cards = () => screen.getAllByRole('link', { name: /^播放 .*$/ });
 const resourceCalls = () =>
   (fetch as jest.Mock).mock.calls.filter(([url]) =>
     String(url).startsWith('/api/kids?')
@@ -59,9 +59,9 @@ beforeEach(() => {
 it('shows 25 immediately clickable movies without waiting for any network response', () => {
   render(<KidsPage />);
   expect(cards()).toHaveLength(25);
-  fireEvent.click(screen.getByRole('link', { name: '查看 头脑特工队 的详情' }));
+  fireEvent.click(screen.getByRole('link', { name: '播放 头脑特工队' }));
   const href = new URL(push.mock.calls[0][0], 'https://test.local');
-  expect(href.pathname).toBe('/detail');
+  expect(href.pathname).toBe('/play');
   expect(href.searchParams.get('kids_id')).toBe('insideout');
   expect(href.searchParams.has('kids_language')).toBe(false);
   expect(href.searchParams.has('source')).toBe(false);
@@ -111,7 +111,7 @@ it('filters the offline catalogue by aliases immediately and resets pagination o
   );
   expect(cards()).toHaveLength(expected.length);
   expect(
-    screen.getByRole('link', { name: '查看 头脑特工队 的详情' })
+    screen.getByRole('link', { name: '播放 头脑特工队' })
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '清除搜索' }));
   expect(cards()).toHaveLength(25);
@@ -123,7 +123,7 @@ it('passes an explicitly requested audio language to shared discovery without cl
   window.history.replaceState({}, '', `/kids?${query}`);
   render(<KidsPage />);
   expect(cards()).toHaveLength(25);
-  fireEvent.click(screen.getByRole('link', { name: '查看 头脑特工队 的详情' }));
+  fireEvent.click(screen.getByRole('link', { name: '播放 头脑特工队' }));
   const href = new URL(push.mock.calls[0][0], 'https://test.local');
   expect(href.searchParams.get('kids_id')).toBe('insideout');
   expect(href.searchParams.get('kids_language')).toBe('en');

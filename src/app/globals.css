@@ -583,6 +583,40 @@ div[data-media-provider] video {
     padding-top: 72px;
   }
 }
+/* The playback title and controls share one row on every screen size. */
+.playback-header {
+  min-height: 48px;
+  padding-top: calc(4px + env(safe-area-inset-top));
+  padding-bottom: 4px;
+}
+.playback-header-back > button,
+.playback-header-controls > button,
+.playback-header-controls > div > button,
+.playback-header-controls > div.w-10 {
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+}
+.playback-header h1 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 24px;
+}
+.compact-playback .playback-page {
+  padding-top: 4px;
+  gap: 8px;
+}
+.compact-playback .playback-page > div:first-child {
+  padding-right: 0;
+}
+@media (min-width: 768px) {
+  .playback-header h1 {
+    font-size: 16px;
+  }
+}
 .glass-popover {
   max-height: calc(100dvh - 32px);
   overflow-y: auto;

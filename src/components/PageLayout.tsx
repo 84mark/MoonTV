@@ -8,13 +8,26 @@ import { UserMenu } from './UserMenu';
 interface PageLayoutProps {
   children: React.ReactNode;
   activePath?: string;
+  playbackHeader?: React.ReactNode;
 }
 
-const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
+const PageLayout = ({
+  children,
+  activePath = '/',
+  playbackHeader,
+}: PageLayoutProps) => {
+  const compactPlayback =
+    activePath === '/play' && playbackHeader !== undefined;
   return (
-    <div className='glass-app w-full min-h-screen'>
+    <div
+      className={`glass-app w-full min-h-screen${
+        compactPlayback ? ' compact-playback' : ''
+      }`}
+    >
       {/* 移动端头部 */}
-      <MobileHeader showBackButton={['/play'].includes(activePath)} />
+      {!compactPlayback && (
+        <MobileHeader showBackButton={['/play'].includes(activePath)} />
+      )}
 
       {/* 主要布局容器 */}
       <div className='flex md:grid md:grid-cols-[auto_1fr] w-full min-h-screen md:min-h-auto'>
@@ -26,17 +39,37 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
         {/* 主内容区域 */}
         <div className='relative min-w-0 flex-1 transition-all duration-300'>
           {/* 桌面端左上角返回按钮 */}
-          {['/play'].includes(activePath) && (
+          {!compactPlayback && ['/play'].includes(activePath) && (
             <div className='absolute top-3 left-1 z-20 hidden md:flex'>
               <BackButton />
             </div>
           )}
 
           {/* 桌面端顶部按钮 */}
-          <div className='glass-toolbar absolute top-4 right-7 z-[800] hidden md:flex items-center gap-1'>
-            <ThemeToggle />
-            <UserMenu />
-          </div>
+          {!compactPlayback && (
+            <div className='glass-toolbar absolute top-4 right-7 z-[800] hidden md:flex items-center gap-1'>
+              <ThemeToggle />
+              <UserMenu />
+            </div>
+          )}
+
+          {compactPlayback && (
+            <header
+              className='playback-header relative z-[800] flex items-center gap-2 px-4 lg:px-[2rem] 2xl:px-12'
+              aria-label='播放控制栏'
+            >
+              <div className='playback-header-back shrink-0'>
+                <BackButton />
+              </div>
+              <div className='min-w-0 flex-1 overflow-hidden'>
+                {playbackHeader}
+              </div>
+              <div className='playback-header-controls flex shrink-0 items-center gap-0.5'>
+                <ThemeToggle />
+                <UserMenu />
+              </div>
+            </header>
+          )}
 
           {/* 主内容 */}
           <main className='app-main flex-1 md:min-h-0'>{children}</main>
