@@ -3,6 +3,7 @@ import { Request, Response } from 'next/dist/compiled/@edge-runtime/primitives';
 
 import { seededLiveChannels } from '@/lib/live';
 import {
+  BEST_FAN_SUBSCRIPTION_URL,
   DAILY_CHANNELS_URL,
   DAILY_STATUS_URL,
   WorldLiveSource,
@@ -33,6 +34,7 @@ const satellite = {
   errors: [],
 };
 function responseFor(url: string) {
+  if (url === BEST_FAN_SUBSCRIPTION_URL) return new Response('#EXTM3U');
   if (url === DAILY_STATUS_URL)
     return new Response(
       JSON.stringify({ state: 'ok', last_success_at: checked })
@@ -94,7 +96,7 @@ it('retains reviewed seeds on outage and does not claim a successful update', as
     updatedAt: 0,
     fallback: true,
   });
-  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 2);
+  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 3);
 });
 it('only refreshes approved stations on trusted CDNs and adds decoded HTTPS HD satellites', async () => {
   fetchMock.mockImplementation((url: string) =>
@@ -164,22 +166,22 @@ it('deduplicates concurrent updates, caches fresh data for 30 minutes and failed
     [GET(), GET(), GET()].map(async (p) => (await p).json())
   );
   expect(bodies[0]).toEqual(bodies[1]);
-  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 2);
+  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 3);
   now += 29 * 60000;
   await GET();
-  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 2);
+  expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 3);
   now += 2 * 60000;
   fetchMock.mockRejectedValue(new Error('outage'));
   const fallback = await (await GET()).json();
   expect(fallback.fallback).toBe(true);
   expect(fallback.updatedAt).toBe(bodies[0].updatedAt);
-  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 2) * 2);
+  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 3) * 2);
   now += 59000;
   await GET();
-  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 2) * 2);
+  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 3) * 2);
   now += 2000;
   await GET();
-  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 2) * 3);
+  expect(fetchMock).toHaveBeenCalledTimes((feeds.length + 3) * 3);
 });
 
 it('prioritizes recent verified HTTPS over old seed and HTTP alternatives for a known domestic channel', async () => {
@@ -211,4 +213,40 @@ it('prioritizes recent verified HTTPS over old seed and HTTP alternatives for a 
     channel.urls.indexOf(verifiedHttp)
   );
   expect(channel.relayRequired).toContain(verifiedHttp);
+});
+
+it('refreshes the requested subscription, merges known stations and retains it on an outage', async () => {
+  const subscription =
+    '#EXTM3U\n#EXTINF:-1,湖南卫视\nhttp://media.example.com/hunan.m3u8\n#EXTINF:-1,新地方台\nhttps://media.example.com/new.m3u8\n#EXTINF:-1,购物频道\nhttps://media.example.com/shop.m3u8';
+  fetchMock.mockImplementation((url: string) =>
+    Promise.resolve(
+      url === BEST_FAN_SUBSCRIPTION_URL
+        ? new Response(subscription)
+        : responseFor(url)
+    )
+  );
+  const { GET } = loadRoute();
+  const body = await (await GET()).json();
+  const hunan = body.channels.filter(
+    (c: { name: string }) => c.name === '湖南卫视'
+  );
+  expect(hunan).toHaveLength(1);
+  expect(hunan[0].urls).toContain('http://media.example.com/hunan.m3u8');
+  expect(hunan[0].relayRequired).toContain(
+    'http://media.example.com/hunan.m3u8'
+  );
+  expect(hunan[0].verification.method).not.toBe('upstream-decode');
+  expect(body.subscription).toMatchObject({
+    channelCount: 2,
+    updatedAt: now,
+    fallback: false,
+  });
+  now += 31 * 60000;
+  fetchMock.mockRejectedValue(new Error('down'));
+  const stale = await (await GET()).json();
+  expect(
+    stale.channels.find((c: { name: string }) => c.name === '新地方台').urls
+  ).toContain('https://media.example.com/new.m3u8');
+  expect(stale.subscription.fallback).toBe(true);
+  expect(stale.subscription.updatedAt).toBe(body.subscription.updatedAt);
 });

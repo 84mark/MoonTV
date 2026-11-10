@@ -145,3 +145,36 @@ it('never shows shopping channels in either region or imported lists', async () 
   fireEvent.click(screen.getByRole('button', { name: '海外频道' }));
   expect(screen.queryByRole('button', { name: '播放 QVC' })).toBeNull();
 });
+
+it('keeps the current stream selected while browsing other channel groups', async () => {
+  await openPage();
+  fireEvent.click(screen.getByRole('button', { name: '播放 浙江卫视' }));
+  expect(screen.getByLabelText('当前直播播放器')).toHaveTextContent('浙江卫视');
+  fireEvent.click(screen.getByRole('button', { name: '海外频道' }));
+  fireEvent.change(screen.getByRole('textbox', { name: '搜索频道' }), {
+    target: { value: 'DW' },
+  });
+  expect(screen.getByLabelText('当前直播播放器')).toHaveTextContent('浙江卫视');
+  fireEvent.click(screen.getByRole('button', { name: '播放 DW English' }));
+  expect(screen.getByLabelText('当前直播播放器')).toHaveTextContent(
+    'DW English'
+  );
+});
+
+it('shows a successful subscription sync even when another directory is unavailable', async () => {
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      channels,
+      fallback: true,
+      updatedAt: 0,
+      subscription: {
+        updatedAt: Date.now(),
+        channelCount: 87,
+        fallback: false,
+      },
+    }),
+  });
+  await openPage();
+  expect(screen.getByText('订阅已同步，含 87 个频道。')).toBeInTheDocument();
+});

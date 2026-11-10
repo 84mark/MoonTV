@@ -208,3 +208,78 @@ export function publicWorldChannel(source: WorldLiveSource): LiveChannel {
   void trustedHosts;
   return channel;
 }
+
+export const BEST_FAN_SUBSCRIPTION_URL =
+  'https://raw.githubusercontent.com/best-fan/iptv-sources/main/cn_all.m3u8';
+
+/** The user-selected subscription is a candidate directory, not playback evidence. */
+export function subscriptionLiveChannels(playlist: string): LiveChannel[] {
+  if (
+    playlist.length > 1024 * 1024 ||
+    !playlist.trimStart().startsWith('#EXTM3U')
+  )
+    throw new Error('Invalid live subscription');
+  const channels = new Map<string, LiveChannel>();
+  let metadata = '';
+  for (const raw of playlist.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.startsWith('#EXTINF:')) {
+      metadata = line;
+      continue;
+    }
+    if (!line || line.startsWith('#')) continue;
+    const info = metadata;
+    metadata = '';
+    const url = hlsUrl(line, true);
+    if (!info || !url) continue;
+    const comma = info.match(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)?.index;
+    const rawName = comma === undefined ? '' : info.slice(comma + 1).trim();
+    const group = info.match(/group-title="([^"]*)"/i)?.[1] || '';
+    const tvgId = info.match(/tvg-id="([^"]*)"/i)?.[1] || '';
+    if (
+      !rawName ||
+      isShoppingChannel({ name: `${rawName} ${tvgId}`, category: group })
+    )
+      continue;
+    const name = rawName
+      .replace(/\s*(?:\([^)]*\)|\[[^\]]*\])/g, '')
+      .replace(/(?:超高清|高清|标清|UHD|FHD|HD|SD)$/i, '')
+      .replace(/^CCTV[-\s]*(\d+)/i, 'CCTV$1')
+      .replace(/^(CCTV\d+\+?)[-\s]*[\u4e00-\u9fff].*$/i, '$1')
+      .trim();
+    if (!name) continue;
+    const overseas =
+      /港澳台|香港|澳门|澳門|台湾|台灣|凤凰|鳳凰/.test(name + group) ||
+      /\.(hk|mo|tw)(?:@|$)/i.test(tvgId);
+    const id = `${overseas ? 'hk' : 'cn'}:${name.replace(/\s/g, '')}`;
+    const previous = channels.get(id);
+    if (previous) {
+      if (!previous.urls.includes(url)) previous.urls.push(url);
+      if (
+        (overseas || url.startsWith('http:')) &&
+        !previous.relayRequired?.includes(url)
+      )
+        previous.relayRequired?.push(url);
+      continue;
+    }
+    channels.set(id, {
+      id,
+      name,
+      region: overseas ? 'overseas' : 'domestic',
+      category: overseas
+        ? '港澳台'
+        : /^CCTV|^CGTN/i.test(name)
+        ? '央视'
+        : /卫视/.test(name)
+        ? '卫视'
+        : /卡通|少儿|动漫/.test(name + group)
+        ? '少儿'
+        : '地方频道',
+      urls: [url],
+      relayRequired: overseas || url.startsWith('http:') ? [url] : [],
+      sourceUrl: BEST_FAN_SUBSCRIPTION_URL,
+      description: 'best-fan 订阅候选，播放可用性以当前网络实际加载为准。',
+    });
+  }
+  return Array.from(channels.values());
+}

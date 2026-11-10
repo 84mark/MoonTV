@@ -4,9 +4,11 @@ import {
   seededLiveChannels,
 } from './live';
 import {
+  BEST_FAN_SUBSCRIPTION_URL,
   DAILY_CHANNELS_URL,
   DAILY_STATUS_URL,
   satelliteReportCurrent,
+  subscriptionLiveChannels,
   verifiedSatelliteChannels,
   worldChannelCandidates,
   WorldLiveSource,
@@ -16,10 +18,23 @@ import world from './live-world.json';
 const sources = world as WorldLiveSource[];
 const stationName = (name: string) =>
   name
+    .replace(/^(CCTV)[-\s]*(\d+\+?)[-\s]*[\u4e00-\u9fff].*$/i, '$1$2')
     .replace(/(?:4K|8K|UHD|FHD|HD|高清|超清|标清|频道|[\s（）()_-])/gi, '')
     .toLowerCase();
-let saved = { channels: seededLiveChannels(), updatedAt: 0, fallback: true };
+let saved = {
+  channels: seededLiveChannels(),
+  updatedAt: 0,
+  fallback: true,
+  subscription: {
+    url: BEST_FAN_SUBSCRIPTION_URL,
+    updatedAt: 0,
+    channelCount: 0,
+    fallback: true,
+  },
+};
+let subscriptionChannels: ReturnType<typeof subscriptionLiveChannels> = [];
 let cachedAt = 0;
+let refreshAfter = 60000;
 let pending: Promise<typeof saved> | null = null;
 
 async function fetchUpstream(url: string, kind: 'text' | 'json') {
@@ -38,10 +53,7 @@ async function fetchUpstream(url: string, kind: 'text' | 'json') {
 }
 
 export async function getLiveCatalog() {
-  if (
-    !cachedAt ||
-    Date.now() - cachedAt > (saved.fallback ? 60000 : 30 * 60 * 1000)
-  ) {
+  if (!cachedAt || Date.now() - cachedAt > refreshAfter) {
     if (!pending)
       pending = (async () => {
         // Never expand a country playlist into an unreviewed list of channels.
@@ -50,6 +62,15 @@ export async function getLiveCatalog() {
             sources.map((s) => s.feed).filter((feed) => /^[a-z]{2}$/.test(feed))
           )
         );
+        const subscriptionPromise = fetchUpstream(
+          BEST_FAN_SUBSCRIPTION_URL,
+          'text'
+        )
+          .then((text) => ({
+            channels: subscriptionLiveChannels(String(text)),
+            fresh: true,
+          }))
+          .catch(() => ({ channels: subscriptionChannels, fresh: false }));
         const reportPromise = Promise.all([
           fetchUpstream(DAILY_STATUS_URL, 'json'),
           fetchUpstream(DAILY_CHANNELS_URL, 'json'),
@@ -84,6 +105,8 @@ export async function getLiveCatalog() {
         } catch {
           /* A report outage never turns stale entries into newly verified channels. */
         }
+        const subscription = await subscriptionPromise;
+        subscriptionChannels = subscription.channels;
         const seeds = seededLiveChannels();
         const curated = seeds.map((channel) => {
           const config = sources.find((source) => source.id === channel.id);
@@ -132,12 +155,22 @@ export async function getLiveCatalog() {
               );
             });
         const fresh =
-          reportCurrent && playlistResults.every((result) => result.fresh);
+          reportCurrent &&
+          subscription.fresh &&
+          playlistResults.every((result) => result.fresh);
         const recentlyVerified = new Set(
           verified.flatMap((channel) => channel.urls)
         );
+        const subscriptionCandidates = subscription.channels.map((channel) => {
+          const known = [...curated, ...verified].find(
+            (item) => stationName(item.name) === stationName(channel.name)
+          );
+          // Reuse stable IDs so favorites and relay lookups keep working.
+          return known ? { ...channel, id: known.id } : channel;
+        });
         saved = {
           channels: mergeLiveChannels([
+            ...subscriptionCandidates,
             ...curated,
             ...verified.map((channel) => {
               const known = curated.find(
@@ -154,6 +187,20 @@ export async function getLiveCatalog() {
             }),
           ]).map((channel) => ({
             ...channel,
+            // New subscription lines have not inherited a prior line's decode result.
+            ...(channel.verification?.method === 'upstream-decode' &&
+            subscriptionCandidates.some(
+              (candidate) =>
+                candidate.id === channel.id &&
+                candidate.urls.some((url) => !recentlyVerified.has(url))
+            )
+              ? {
+                  verification: {
+                    ...channel.verification,
+                    method: '含订阅候选，待实测',
+                  },
+                }
+              : {}),
             urls: [...channel.urls].sort((a, b) => {
               const rank = (url: string) =>
                 (url.startsWith('https:') ? 0 : 2) +
@@ -163,7 +210,21 @@ export async function getLiveCatalog() {
           })),
           updatedAt: fresh ? Date.now() : saved.updatedAt,
           fallback: !fresh,
+          subscription: {
+            url: BEST_FAN_SUBSCRIPTION_URL,
+            updatedAt: subscription.fresh
+              ? Date.now()
+              : saved.subscription.updatedAt,
+            channelCount: subscription.channels.length,
+            fallback: !subscription.fresh,
+          },
         };
+        // A partial directory outage should not re-download a healthy subscription every minute.
+        refreshAfter = fresh
+          ? 30 * 60000
+          : subscription.fresh
+          ? 5 * 60000
+          : 60000;
         cachedAt = Date.now();
         return saved;
       })().finally(() => {

@@ -1,6 +1,7 @@
 /** @jest-environment node */
 import {
   publicWorldChannel,
+  subscriptionLiveChannels,
   verifiedSatelliteChannels,
   worldChannelCandidates,
   WorldLiveSource,
@@ -135,4 +136,39 @@ it('rejects private HTTP targets even when an upstream report marks them success
       now
     )
   ).toEqual([]);
+});
+
+it('parses the selected subscription as unverified HLS candidates, deduplicates and protects the relay', () => {
+  const playlist =
+    '#EXTM3U\n' +
+    [
+      ['CCTV-1 (720p)', 'http://media.example.com/cctv1.m3u8'],
+      ['CCTV1', 'https://media.example.com/cctv1.m3u8'],
+      ['CCTV1', 'https://media.example.com/cctv1.m3u8'],
+      ['凤凰资讯', 'https://media.example.com/phoenix.m3u8'],
+      ['好易购', 'https://media.example.com/shop.m3u8'],
+      ['Local', 'http://127.0.0.1/stream.m3u8'],
+      ['Private', 'http://192.168.1.1/stream.m3u8'],
+      ['Multicast', 'udp://239.1.1.1:1234'],
+      ['Not HLS', 'https://media.example.com/a.mp4'],
+    ]
+      .map(([name, url]) => `#EXTINF:-1,${name}\n${url}`)
+      .join('\n');
+  const channels = subscriptionLiveChannels(playlist);
+  expect(channels).toHaveLength(2);
+  expect(channels[0]).toMatchObject({
+    id: 'cn:CCTV1',
+    region: 'domestic',
+    urls: [
+      'http://media.example.com/cctv1.m3u8',
+      'https://media.example.com/cctv1.m3u8',
+    ],
+    relayRequired: ['http://media.example.com/cctv1.m3u8'],
+  });
+  expect(channels[0].verification).toBeUndefined();
+  expect(channels[1]).toMatchObject({
+    region: 'overseas',
+    relayRequired: ['https://media.example.com/phoenix.m3u8'],
+  });
+  expect(() => subscriptionLiveChannels('<html>error</html>')).toThrow();
 });

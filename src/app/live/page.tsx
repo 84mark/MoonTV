@@ -3,7 +3,6 @@
 import {
   ArrowUpRight,
   CheckCircle2,
-  Globe2,
   Heart,
   History,
   ListVideo,
@@ -73,10 +72,16 @@ function LivePageClient() {
         if (!Array.isArray(data.channels))
           throw new Error('频道目录暂时不可用');
         setBuiltin(data.channels);
-        setUpdatedAt(Number(data.updatedAt) || 0);
+        setUpdatedAt(
+          Number(data.subscription?.updatedAt) || Number(data.updatedAt) || 0
+        );
         setNotice(
-          data.fallback
-            ? '目录暂未更新，继续显示本地频道候选。'
+          data.subscription && !data.subscription.fallback
+            ? `订阅已同步，含 ${
+                Number(data.subscription.channelCount) || 0
+              } 个频道。`
+            : data.fallback
+            ? '部分目录暂未更新，继续显示已有频道。'
             : '频道目录已更新。'
         );
       }
@@ -159,17 +164,14 @@ function LivePageClient() {
     }));
   return (
     <PageLayout activePath='/live'>
-      <div className='mx-auto max-w-[1500px] space-y-5 px-4 pb-28 pt-6 md:px-8 md:pt-16'>
+      <div className='mx-auto max-w-[1800px] space-y-3 px-3 pb-28 pt-3 md:px-6 md:pt-16'>
         <header className='flex flex-wrap items-center justify-between gap-3'>
           <div className='flex items-center gap-3'>
-            <span className='flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400'>
-              <Radio className='h-6 w-6' />
+            <span className='flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400'>
+              <Radio className='h-4 w-4' />
             </span>
             <div>
-              <h1 className='text-2xl font-bold tracking-tight md:text-3xl'>
-                电视直播
-              </h1>
-              <p className='mt-1 text-xs text-slate-400'>换个频道，发现世界</p>
+              <h1 className='text-lg font-bold tracking-tight'>电视直播</h1>
             </div>
           </div>
           <div className='flex items-center gap-1 rounded-xl bg-white/50 p-1 dark:bg-slate-800/60'>
@@ -263,10 +265,10 @@ function LivePageClient() {
             </div>
           </section>
         )}
-        <div className='grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_390px]'>
+        <div className='grid items-start gap-4 lg:grid-cols-[268px_minmax(0,1fr)] xl:grid-cols-[288px_minmax(0,1fr)]'>
           <div
             ref={stage}
-            className='min-w-0 scroll-mt-5 space-y-4 xl:sticky xl:top-5'
+            className='order-1 min-w-0 scroll-mt-4 space-y-3 lg:order-2 lg:sticky lg:top-4'
           >
             {selected ? (
               <LivePlayer key={selected.id} channel={selected} />
@@ -286,10 +288,10 @@ function LivePageClient() {
                   </span>
                   <div>
                     <h2 className='text-lg font-semibold md:text-2xl'>
-                      从一个好频道开始
+                      选择频道，开始观看
                     </h2>
                     <p className='mt-2 text-xs text-slate-400 md:text-sm'>
-                      新闻、文化与探索，选择频道即可连接
+                      从频道列表选择直播，或点击下方快捷频道
                     </p>
                   </div>
                   <div className='flex flex-wrap justify-center gap-2'>
@@ -366,57 +368,20 @@ function LivePageClient() {
                     : '收藏此频道'}
                 </button>
               </section>
-            ) : (
-              <div className='flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-xs text-slate-400'>
-                <span className='inline-flex items-center gap-1.5'>
-                  <Globe2 className='h-3.5 w-3.5' />
-                  国内频道优先直连
-                </span>
-                <span className='inline-flex items-center gap-1.5'>
-                  <Tv className='h-3.5 w-3.5' />
-                  海外频道 Cloudflare 转发
-                </span>
-                <span>{channels.length} 个频道可选</span>
-              </div>
-            )}
-            <details className='rounded-2xl border border-slate-200/60 bg-white/30 px-4 py-3 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/30'>
-              <summary className='cursor-pointer font-medium'>
-                频道说明与官方入口
-              </summary>
-              <p className='mt-3 leading-6'>
-                国内频道优先由浏览器直连；海外频道经 Cloudflare 转发。HTTP
-                线路和直连失败的内置线路使用兼容转发，实际线路会显示在播放器中。已排除购物频道，播放仍可能受源站状态影响。
-              </p>
-              <div className='mt-3 flex flex-wrap gap-2'>
-                <a
-                  href='https://plus.nasa.gov/'
-                  target='_blank'
-                  rel='noreferrer'
-                  className='inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-white/60 px-3 font-medium dark:bg-slate-700'
-                >
-                  NASA+ 官方平台
-                  <ArrowUpRight className='h-3 w-3' />
-                </a>
-                <a
-                  href='https://www.arte.tv/fr/direct/'
-                  target='_blank'
-                  rel='noreferrer'
-                  className='inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-white/60 px-3 font-medium dark:bg-slate-700'
-                >
-                  ARTE 官方直播
-                  <ArrowUpRight className='h-3 w-3' />
-                </a>
-              </div>
-              <p className='mt-2 text-[11px] text-slate-400'>
-                以上官方链接在新窗口打开，不作为本站已验证播放源。
+            ) : null}
+            <details className='px-1 text-xs text-slate-500'>
+              <summary className='cursor-pointer py-2'>播放线路说明</summary>
+              <p className='max-w-3xl pb-2 leading-6'>
+                国内频道优先直连，海外频道使用 Cloudflare 转发。HTTP
+                线路及直连失败的内置线路使用兼容转发；实际线路以播放器显示为准。
               </p>
             </details>
           </div>
           <section
-            className='min-w-0 rounded-3xl border border-white/70 bg-white/60 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 md:p-4'
+            className='order-2 flex min-w-0 flex-col rounded-2xl border border-white/70 bg-white/70 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 lg:order-1 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-7rem)]'
             aria-label='频道列表'
           >
-            <div className='mb-4 flex items-center justify-between gap-3 px-1'>
+            <div className='mb-3 flex shrink-0 items-center justify-between gap-3 px-1'>
               <h2 className='flex items-center gap-2 font-semibold'>
                 <ListVideo className='h-4 w-4 text-sky-500' />
                 选择频道
@@ -466,7 +431,7 @@ function LivePageClient() {
                 </button>
               ))}
             </div>
-            <div className='my-3 flex items-center justify-between gap-2 px-1'>
+            <div className='my-2 flex shrink-0 items-center justify-between gap-2 px-1'>
               <div className='flex items-center gap-3'>
                 {[
                   { label: '全部频道', icon: Radio },
@@ -495,62 +460,55 @@ function LivePageClient() {
             {notice && (
               <p
                 role='status'
-                className='mb-3 rounded-lg bg-sky-500/5 px-3 py-2 text-[11px] leading-5 text-slate-400'
+                className='mb-2 px-1 text-[10px] leading-5 text-slate-400'
               >
                 {notice}
               </p>
             )}
-            <div className='grid grid-cols-2 gap-2 lg:grid-cols-3 xl:max-h-[65vh] xl:grid-cols-1 xl:overflow-y-auto xl:pr-1'>
+            <div className='min-h-0 space-y-1 overflow-y-auto overscroll-contain lg:pr-1'>
               {filtered.map((channel) => {
                 const active = channel.id === selectedId;
                 const fav = preferences.favorites.includes(channel.id);
                 return (
                   <div
                     key={channel.id}
-                    className={`relative min-w-0 overflow-hidden rounded-2xl border transition-colors ${
+                    className={`group relative flex min-w-0 items-center rounded-xl border transition-colors ${
                       active
-                        ? 'border-sky-400 bg-sky-50 shadow-sm dark:border-sky-500 dark:bg-sky-950/50'
-                        : 'border-slate-200/50 bg-white/60 hover:border-slate-300 dark:border-slate-700/60 dark:bg-slate-800/50 dark:hover:border-slate-500'
+                        ? 'border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/60'
+                        : 'border-transparent hover:bg-slate-100/80 dark:hover:bg-slate-800'
                     }`}
                   >
                     <button
                       aria-label={`播放 ${channel.name}`}
                       aria-pressed={active}
                       onClick={() => choose(channel.id)}
-                      className='min-h-[116px] w-full p-3 pb-9 text-left xl:min-h-[92px] xl:pb-3 xl:pr-12'
+                      className='flex min-h-[60px] min-w-0 flex-1 items-center gap-2.5 py-2 pl-2 pr-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 rounded-xl'
                     >
-                      <div className='mb-2 flex items-center gap-2'>
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-black tracking-tight ${
+                          active
+                            ? 'bg-sky-500 text-white'
+                            : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
+                        }`}
+                      >
+                        {wordmark(channel.name)}
+                      </span>
+                      <span className='min-w-0 flex-1'>
                         <span
-                          className={`flex h-7 min-w-[28px] items-center justify-center rounded-lg px-1.5 text-[10px] font-black tracking-tight ${
+                          className={`block truncate text-[13px] font-semibold ${
                             active
-                              ? 'bg-sky-500 text-white'
-                              : liveChannelRegion(channel) === 'overseas'
-                              ? 'bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                              : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300'
+                              ? 'text-sky-700 dark:text-sky-300'
+                              : 'text-slate-800 dark:text-slate-100'
                           }`}
                         >
-                          {wordmark(channel.name)}
+                          {channel.name}
                         </span>
-                        <span
-                          className={`text-[10px] ${
-                            active
-                              ? 'font-semibold text-sky-600 dark:text-sky-400'
-                              : 'text-slate-400'
-                          }`}
-                        >
-                          {active ? '已选频道' : channel.category}
-                        </span>
-                      </div>
-                      <span className='block text-[13px] font-semibold leading-6 text-slate-800 dark:text-slate-100'>
-                        {channel.name}
-                        <span className='ml-1.5 inline-block align-middle'>
+                        <span className='mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-400'>
+                          <span className='truncate'>
+                            {active ? '正在观看' : channel.category}
+                          </span>
                           <SourceBadge count={channel.urls.length} />
                         </span>
-                      </span>
-                      <span className='mt-1 block text-[10px] leading-4 text-slate-400'>
-                        {[channel.language, channel.quality]
-                          .filter(Boolean)
-                          .join(' · ') || '自定义直播'}
                       </span>
                     </button>
                     <button
@@ -559,7 +517,7 @@ function LivePageClient() {
                       }`}
                       aria-pressed={fav}
                       onClick={() => favorite(channel.id)}
-                      className={`absolute bottom-1 right-1 flex h-11 w-11 items-center justify-center rounded-xl xl:bottom-auto xl:top-2 ${
+                      className={`flex h-11 w-9 shrink-0 items-center justify-center rounded-lg focus-visible:ring-2 focus-visible:ring-sky-500 ${
                         fav
                           ? 'text-rose-500'
                           : 'text-slate-300 hover:text-rose-400 dark:text-slate-500'
