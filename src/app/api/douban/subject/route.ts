@@ -30,21 +30,46 @@ export async function GET(request: Request) {
     );
   try {
     if (!id) {
-      const result = matchDoubanSubjects(
-        await fetchDoubanJson(
-          `https://movie.douban.com/j/subject_suggest?q=${encodeURIComponent(
-            title
-          )}`
-        ),
-        title,
-        year
+      const suggestions = await fetchDoubanJson(
+        `https://movie.douban.com/j/subject_suggest?q=${encodeURIComponent(
+          title
+        )}`
       );
+      const posterOnly = params.get('posterOnly') === '1';
+      const matchingSuggestions =
+        posterOnly && preferredKind && Array.isArray(suggestions)
+          ? suggestions.filter((item) => item?.type === preferredKind)
+          : suggestions;
+      const result = matchDoubanSubjects(matchingSuggestions, title, year);
       if (!result.subject)
         return NextResponse.json(
           { subject: null, candidates: result.candidates },
           { headers }
         );
       id = result.subject.id;
+      if (posterOnly && Array.isArray(matchingSuggestions)) {
+        const suggestion = matchingSuggestions.find((item) => item?.id === id);
+        let poster = '';
+        try {
+          const url = new URL(suggestion?.img);
+          if (
+            ['http:', 'https:'].includes(url.protocol) &&
+            !url.username &&
+            !url.password
+          )
+            poster = url.href;
+        } catch {
+          // Missing or malformed thumbnails use the full subject fallback.
+        }
+        if (poster)
+          return NextResponse.json(
+            {
+              subject: { ...result.subject, poster, kind: suggestion.type },
+              candidates: [],
+            },
+            { headers }
+          );
+      }
     }
     const { data, kind } = await fetchDoubanSubjectData(id, preferredKind);
     const subject = parseDoubanSubject(data, id);

@@ -220,13 +220,12 @@ export default function VideoCard({
     const doubanQuery = /^\d{5,12}$/.test(actualDoubanId)
       ? `&douban_id=${actualDoubanId}&douban_type=${contentKind}`
       : '';
-    const kidsQuery =
-      kidsId && kidsLanguage
-        ? `&${new URLSearchParams({
-            kids_id: kidsId,
-            kids_language: kidsLanguage,
-          })}`
-        : '';
+    const kidsQuery = kidsId
+      ? `&${new URLSearchParams({
+          kids_id: kidsId,
+          ...(kidsLanguage ? { kids_language: kidsLanguage } : {}),
+        })}`
+      : '';
     if (from === 'douban') {
       router.push(
         `/detail?title=${encodeURIComponent(actualTitle.trim())}${

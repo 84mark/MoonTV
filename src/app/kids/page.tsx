@@ -13,29 +13,25 @@ import {
 
 import { KIDS_TITLES, KidsTitle } from '@/lib/kids';
 import { kidsSearchTitle } from '@/lib/kids-resources';
-import type { SearchResult } from '@/lib/types';
 
-import DoubanCardSkeleton from '@/components/DoubanCardSkeleton';
 import PageLayout from '@/components/PageLayout';
 import VideoCard from '@/components/VideoCard';
 
 const PAGE_SIZE = 25;
 
-interface Variant {
-  id: string;
-  title: string;
-  poster: string;
-  language: { code: string; label: string };
-  sources: SearchResult[];
-  season: string;
-  year: string;
-  kind: 'movie' | 'tv';
-}
-interface Pool {
-  status: 'loading' | 'ready' | 'error';
-  variants: Variant[];
-  error?: string;
-}
+const POSTER_CONCURRENCY = 6;
+const posterCache = new Map<string, { url: string; expires: number }>();
+const languages = [
+  ['all', '所有语言'],
+  ['zh-CN', '普通话'],
+  ['en', '英语'],
+  ['yue', '粤语'],
+  ['ja', '日语'],
+  ['ko', '韩语'],
+  ['fr', '法语'],
+  ['ru', '俄语'],
+];
+
 function KidsPageClient() {
   const params = useSearchParams();
   const router = useRouter();
@@ -44,10 +40,10 @@ function KidsPageClient() {
   const [query, setQuery] = useState('');
   const [theme, setTheme] = useState('全部');
   const [limit, setLimit] = useState(PAGE_SIZE);
-  const [pools, setPools] = useState<Record<string, Pool>>({});
   const [posters, setPosters] = useState<Record<string, string>>({});
-  const cache = useRef<Record<string, Pool>>({});
-  const posterCache = useRef<Record<string, string>>({});
+  const posterQueue = useRef<KidsTitle[]>([]);
+  const posterRequests = useRef(new Map<string, AbortController>());
+  const mounted = useRef(false);
   const loadingRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setLimit(PAGE_SIZE);
@@ -70,160 +66,101 @@ function KidsPageClient() {
           (theme === '全部' || item.theme === theme) &&
           `${item.name} ${(item.aliases || []).join(' ')} ${item.id} ${
             item.description
-          } ${item.theme} ${
-            pools[item.id]?.variants
-              .map((variant) => variant.title)
-              .join(' ') || ''
-          }`
+          } ${item.theme}`
             .toLowerCase()
             .includes(query.trim().toLowerCase())
       ),
-    [titleSeeds, theme, query, pools]
+    [titleSeeds, theme, query]
   );
   const pageSeeds = useMemo(
     () => matchingSeeds.slice(0, limit),
     [matchingSeeds, limit]
   );
   const idsKey = pageSeeds.map((item) => item.id).join('|');
-  const storePool = useCallback((id: string, value: Pool) => {
-    cache.current = { ...cache.current, [id]: value };
-    setPools(cache.current);
-  }, []);
-  useEffect(() => {
-    const controller = new AbortController();
-    const seeds = idsKey
-      .split('|')
-      .filter(Boolean)
-      .map((id) => KIDS_TITLES.find((item) => item.id === id))
-      .filter((item): item is KidsTitle => Boolean(item));
-    let cursor = 0;
-    async function worker() {
-      while (cursor < seeds.length && !controller.signal.aborted) {
-        const seed = seeds[cursor++];
-        if (
-          cache.current[seed.id]?.status === 'ready' ||
-          cache.current[seed.id]?.status === 'error'
-        )
-          continue;
-        storePool(seed.id, { status: 'loading', variants: [] });
+  // Catalog cards never wait for a video-source search or poster metadata.
+  // A single queue survives pagination; appending a page does not restart requests.
+  const drainPosters = useCallback(function drain() {
+    while (
+      mounted.current &&
+      posterRequests.current.size < POSTER_CONCURRENCY
+    ) {
+      const seed = posterQueue.current.shift();
+      if (!seed) break;
+      if (posterRequests.current.has(seed.id)) continue;
+      const controller = new AbortController();
+      posterRequests.current.set(seed.id, controller);
+      void (async () => {
+        const timer = setTimeout(() => controller.abort(), 8000);
+        let url = '';
         try {
-          const response = await fetch(
-            `/api/kids?${new URLSearchParams({ id: seed.id })}`,
-            { signal: controller.signal, cache: 'no-store' }
-          );
-          if (!response.ok)
-            throw new Error(
-              response.status === 401
-                ? '请重新登录后找动画'
-                : '这次没找到，请再试一次'
-            );
-          const data = await response.json();
-          if (!Array.isArray(data.variants))
-            throw new Error('这次没找到，请再试一次');
-          if (!controller.signal.aborted)
-            storePool(seed.id, { status: 'ready', variants: data.variants });
-        } catch (error) {
-          if (!controller.signal.aborted)
-            storePool(seed.id, {
-              status: 'error',
-              variants: [],
-              error:
-                error instanceof Error ? error.message : '找动画遇到一点问题',
-            });
-        }
-      }
-    }
-    const timer = setTimeout(() => {
-      void Promise.all([worker(), worker()]);
-    }, 100);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [idsKey, storePool]);
-  // Posters are metadata only: their original language never labels a playable version.
-  useEffect(() => {
-    const controller = new AbortController();
-    const seeds = idsKey
-      .split('|')
-      .filter(Boolean)
-      .map((id) => KIDS_TITLES.find((item) => item.id === id))
-      .filter((item): item is KidsTitle => Boolean(item));
-    let cursor = 0;
-    async function worker() {
-      while (cursor < seeds.length && !controller.signal.aborted) {
-        const seed = seeds[cursor++];
-        if (
-          seed.id in posterCache.current ||
-          cache.current[seed.id]?.variants.some((item) => item.poster)
-        )
-          continue;
-        try {
-          const response = await fetch(
-            `/api/douban/subject?${new URLSearchParams({
-              title: seed.name,
-              kind: seed.kind,
-              posterOnly: '1',
-            })}`,
-            { signal: controller.signal }
-          );
-          if (!response.ok) throw new Error('Metadata unavailable');
-          const data = await response.json();
-          if (!controller.signal.aborted) {
-            posterCache.current = {
-              ...posterCache.current,
-              [seed.id]: data.subject?.poster || '',
-            };
-            setPosters(posterCache.current);
+          const request = new URLSearchParams({
+            title: seed.name,
+            kind: seed.kind,
+            posterOnly: '1',
+          });
+          if (seed.year) request.set('year', seed.year);
+          const response = await fetch(`/api/douban/subject?${request}`, {
+            signal: controller.signal,
+          });
+          if (response.ok) {
+            const data = await response.json();
+            url =
+              typeof data.subject?.poster === 'string'
+                ? data.subject.poster
+                : '';
           }
         } catch {
-          if (!controller.signal.aborted) {
-            posterCache.current = { ...posterCache.current, [seed.id]: '' };
-            setPosters(posterCache.current);
+          // Missing metadata must never block browsing or playback discovery.
+        } finally {
+          clearTimeout(timer);
+          if (posterRequests.current.get(seed.id) === controller) {
+            posterRequests.current.delete(seed.id);
+            if (mounted.current) {
+              if (posterCache.size >= 256)
+                posterCache.delete(posterCache.keys().next().value as string);
+              posterCache.set(seed.id, {
+                url,
+                expires: Date.now() + (url ? 30 * 60 * 1000 : 60 * 1000),
+              });
+              setPosters((previous) => ({ ...previous, [seed.id]: url }));
+              drain();
+            }
           }
         }
-      }
+      })();
     }
-    const timer = setTimeout(() => {
-      void Promise.all([worker(), worker()]);
-    }, 100);
+  }, []);
+  useEffect(() => {
+    mounted.current = true;
+    const requests = posterRequests.current;
     return () => {
-      clearTimeout(timer);
-      controller.abort();
+      mounted.current = false;
+      posterQueue.current = [];
+      requests.forEach((controller) => controller.abort());
+      requests.clear();
     };
-  }, [idsKey]);
-  const availableLanguages = useMemo(() => {
-    const labels = new Map<string, string>();
-    titleSeeds.forEach((seed) =>
-      pools[seed.id]?.variants.forEach((v) =>
-        labels.set(v.language.code, v.language.label)
-      )
-    );
-    return Array.from(labels.entries());
-  }, [pools, titleSeeds]);
-  const cards = pageSeeds.flatMap<{
-    seed: KidsTitle;
-    variant: Variant | undefined;
-  }>((seed) => {
-    const pool = pools[seed.id];
-    if (pool?.variants.length) {
-      return pool.variants
-        .filter(
-          (variant) => language === 'all' || variant.language.code === language
-        )
-        .map((variant) => ({ seed, variant }));
-    }
-    const loading = !pool || pool.status === 'loading';
-    return loading && (language === 'all' || language === 'unknown')
-      ? [{ seed, variant: undefined }]
-      : [];
-  });
-  const busy = pageSeeds.some(
-    (seed) => !pools[seed.id] || pools[seed.id].status === 'loading'
-  );
+  }, []);
+  useEffect(() => {
+    const cached: Record<string, string> = {};
+    posterQueue.current = idsKey
+      .split('|')
+      .filter(Boolean)
+      .flatMap((id) => {
+        const hit = posterCache.get(id);
+        if (hit && hit.expires > Date.now()) {
+          cached[id] = hit.url;
+          return [];
+        }
+        if (posterRequests.current.has(id)) return [];
+        const seed = KIDS_TITLES.find((item) => item.id === id);
+        return seed ? [seed] : [];
+      });
+    setPosters((previous) => ({ ...previous, ...cached }));
+    drainPosters();
+  }, [idsKey, drainPosters]);
   const hasMore = matchingSeeds.length > limit;
   useEffect(() => {
-    if (!hasMore || busy || !loadingRef.current) return;
+    if (!hasMore || !loadingRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
@@ -231,11 +168,11 @@ function KidsPageClient() {
           setLimit((value) => value + PAGE_SIZE);
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1, rootMargin: '600px 0px' }
     );
     observer.observe(loadingRef.current);
     return () => observer.disconnect();
-  }, [hasMore, busy, limit]);
+  }, [hasMore, limit]);
   const updateFilter = (nextKind: string, nextLanguage = language) => {
     setLimit(PAGE_SIZE);
     if (nextKind !== kind) {
@@ -291,34 +228,31 @@ function KidsPageClient() {
               aria-label='选择动画语言'
             >
               <span className='min-w-[48px] text-xs font-medium text-gray-600 dark:text-gray-400 sm:text-sm'>
-                语言
+                播放语言
               </span>
               <div className='overflow-x-auto'>
                 <div className='glass-segment inline-flex rounded-full p-0.5 sm:p-1'>
-                  {[['all', '所有语言'], ...availableLanguages].map(
-                    ([code, label]) => (
-                      <button
-                        key={code}
-                        aria-pressed={language === code}
-                        onClick={() => updateFilter(kind, code)}
-                        className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-all sm:px-4 sm:py-2 sm:text-sm ${
-                          language === code
-                            ? 'glass-segment-indicator text-gray-900 dark:text-gray-100'
-                            : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    )
-                  )}
+                  {languages.map(([code, label]) => (
+                    <button
+                      key={code}
+                      aria-pressed={language === code}
+                      onClick={() => updateFilter(kind, code)}
+                      className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-all sm:px-4 sm:py-2 sm:text-sm ${
+                        language === code
+                          ? 'glass-segment-indicator text-gray-900 dark:text-gray-100'
+                          : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
-              {language !== 'all' &&
-                !availableLanguages.some(([code]) => code === language) && (
-                  <span className='text-xs text-gray-500'>
-                    {busy ? '正在查找这个语言版本…' : '暂未找到这个语言版本'}
-                  </span>
-                )}
+              {language !== 'all' && (
+                <span className='text-xs text-gray-500'>
+                  进入详情后匹配所选语言
+                </span>
+              )}
             </div>
             <div
               className='flex flex-col gap-2 sm:flex-row sm:items-center'
@@ -379,53 +313,35 @@ function KidsPageClient() {
               {query ? '搜索结果' : kind === 'tv' ? '动画剧集' : '动画电影'}
             </h2>
             <p role='status' className='text-xs text-slate-400'>
-              {busy
-                ? '正在找动画和语言版本…'
-                : `${cards.filter((card) => card.variant).length} 个资源版本`}
+              {matchingSeeds.length} 部动画
             </p>
           </div>
           <section
             aria-label='动画海报'
             className='grid grid-cols-2 justify-start gap-x-3 gap-y-5 px-0 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-x-5 sm:gap-y-8 sm:px-2'
           >
-            {cards.map(({ seed, variant }) =>
-              variant ? (
-                <div key={variant.id} className='min-w-0'>
-                  <VideoCard
-                    from='douban'
-                    title={variant.title}
-                    query={kidsSearchTitle(seed)}
-                    source={variant.sources[0]?.source}
-                    id={variant.sources[0]?.id}
-                    poster={
-                      variant.poster ||
-                      variant.sources.find((source) => source.poster)?.poster ||
-                      posters[seed.id] ||
-                      ''
-                    }
-                    year={variant.year}
-                    type={variant.kind}
-                    doubanType={variant.kind}
-                    kidsId={seed.id}
-                    kidsLanguage={variant.language.code}
-                  />
-                  <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-                    {[variant.language.label, variant.season]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-              ) : (
-                <DoubanCardSkeleton key={seed.id} />
-              )
-            )}
+            {pageSeeds.map((seed) => (
+              <div key={seed.id} className='min-w-0'>
+                <VideoCard
+                  from='douban'
+                  title={seed.name}
+                  query={kidsSearchTitle(seed)}
+                  poster={posters[seed.id] || ''}
+                  year={seed.year}
+                  type={seed.kind}
+                  doubanType={seed.kind}
+                  kidsId={seed.id}
+                  kidsLanguage={language === 'all' ? undefined : language}
+                />
+              </div>
+            ))}
           </section>
-          {!cards.length && (
+          {!pageSeeds.length && (
             <div className='rounded-3xl bg-white/60 p-10 text-center dark:bg-slate-800'>
               <Search className='mx-auto mb-3 h-8 w-8 text-sky-400' />
               <h3 className='font-bold'>还没找到这部动画</h3>
               <p className='mt-2 text-sm text-slate-500'>
-                换个名字或语言，再找找吧。
+                换个名字或主题，再找找吧。
               </p>
               <button
                 className='mt-4 rounded-xl bg-sky-500 px-5 py-3 font-semibold text-white'
@@ -439,24 +355,14 @@ function KidsPageClient() {
               </button>
             </div>
           )}
-          {(hasMore || busy) && (
+          {hasMore && (
             <div
               ref={loadingRef}
               aria-label='加载更多动画'
               className='mt-12 flex justify-center py-8'
-            >
-              {busy && (
-                <div
-                  role='status'
-                  className='flex items-center gap-2 text-gray-600 dark:text-gray-400'
-                >
-                  <div className='h-6 w-6 animate-spin rounded-full border-b-2 border-green-500' />
-                  加载中...
-                </div>
-              )}
-            </div>
+            />
           )}
-          {!hasMore && !busy && cards.length > 0 && (
+          {!hasMore && pageSeeds.length > 0 && (
             <div className='py-8 text-center text-gray-500'>已加载全部内容</div>
           )}
         </div>

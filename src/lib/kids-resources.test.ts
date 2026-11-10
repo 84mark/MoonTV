@@ -209,3 +209,11 @@ it('accepts explicitly recorded alternate release years for restored editions', 
     false
   );
 });
+
+it('allows discovery across audio languages while retaining the selected catalogue title', () => {
+  const params = new URLSearchParams({ kids_id: item.id, title: item.name });
+  expect(kidsPlaybackMatches(params, result(item.name, '英语'))).toBe(true);
+  expect(kidsPlaybackMatches(params, result(item.name, '国语'))).toBe(true);
+  expect(kidsPlaybackMatches(params, result(item.name))).toBe(true);
+  expect(kidsPlaybackMatches(params, result('任意影片', '国语'))).toBe(false);
+});

@@ -170,3 +170,23 @@ it('keeps the saved children language when reopening a continue-watching card', 
   expect(url.searchParams.get('kids_id')).toBe('peppa');
   expect(url.searchParams.get('kids_language')).toBe('multi:en+zh-CN');
 });
+
+it('preserves the kids catalogue constraint without inventing an audio language', () => {
+  render(
+    <VideoCard
+      from='douban'
+      title='头脑特工队'
+      type='movie'
+      kidsId='insideout'
+    />
+  );
+  fireEvent.click(screen.getByRole('link', { name: '查看 头脑特工队 的详情' }));
+  const url = new URL(
+    mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
+    'https://example.test'
+  );
+  expect(url.pathname).toBe('/detail');
+  expect(url.searchParams.get('kids_id')).toBe('insideout');
+  expect(url.searchParams.has('kids_language')).toBe(false);
+  expect(url.searchParams.get('stype')).toBe('movie');
+});
