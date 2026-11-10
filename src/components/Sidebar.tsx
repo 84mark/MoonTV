@@ -3,6 +3,7 @@
 'use client';
 
 import {
+  Baby,
   Clover,
   Film,
   Home,
@@ -148,24 +149,26 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
       label: '剧集',
       href: '/douban?type=tv',
     },
-    { icon: Radio, label: '电视', href: '/live' },
     {
       icon: Clover,
       label: '综艺',
       href: '/douban?type=show',
     },
+    { icon: Baby, label: '少儿', href: '/kids' },
+    { icon: Radio, label: '电视', href: '/live' },
   ]);
 
   useEffect(() => {
     const runtimeConfig = (window as any).RUNTIME_CONFIG;
     if (runtimeConfig?.CUSTOM_CATEGORIES?.length > 0) {
       setMenuItems((prevItems) => [
-        ...prevItems,
+        ...prevItems.filter((item) => item.href !== '/live'),
         {
           icon: Star,
           label: '自定义',
           href: '/douban?type=custom',
         },
+        ...prevItems.filter((item) => item.href === '/live'),
       ]);
     }
   }, []);

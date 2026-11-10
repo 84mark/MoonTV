@@ -13,6 +13,7 @@ interface Props {
   episode: number;
   total: number;
   mediaKey: string;
+  label?: string;
 }
 export default function PlaybackStats({
   container,
@@ -21,6 +22,7 @@ export default function PlaybackStats({
   episode,
   total,
   mediaKey,
+  label,
 }: Props) {
   const [mode, setMode] = useState<Mode>('auto');
   const [active, setActive] = useState(true);
@@ -107,9 +109,7 @@ export default function PlaybackStats({
           aria-label='播放信息'
         >
           <div className='mb-2 flex items-center justify-between gap-3'>
-            <strong>
-              剧集（{episode}/{total}）
-            </strong>
+            <strong>{label || `剧集（${episode}/${total}）`}</strong>
             <div className='flex gap-2'>
               <button
                 aria-pressed={mode === 'pinned'}

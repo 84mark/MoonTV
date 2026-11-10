@@ -10,7 +10,7 @@ export function browseReturn(value: string | null): string {
   try {
     const url = new URL(value, 'https://moontv.local');
     return url.origin === 'https://moontv.local' &&
-      ['/', '/douban', '/search'].includes(url.pathname)
+      ['/', '/douban', '/search', '/kids', '/live'].includes(url.pathname)
       ? `${url.pathname}${url.search}${url.hash}`
       : '/';
   } catch {

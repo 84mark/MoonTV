@@ -30,6 +30,12 @@ type HlsInstance = {
 const mockPlayers: Player[] = [];
 const mockHls: HlsInstance[] = [];
 
+jest.mock('@/lib/live-probe', () => ({
+  probeLiveSources: () => ({
+    ready: new Promise(() => undefined),
+    cancel: jest.fn(),
+  }),
+}));
 jest.mock('artplayer', () => ({
   __esModule: true,
   default: class {
@@ -66,7 +72,7 @@ jest.mock('hls.js', () => ({
   },
 }));
 const channel: LiveChannel = {
-  id: 'cn:fixture',
+  id: 'custom:fixture',
   name: '测试频道',
   category: '央视',
   urls: ['https://example.com/first.m3u8', 'https://example.com/backup.m3u8'],
@@ -135,7 +141,7 @@ it('switches on a fatal failure, stops every failed HLS loader, and exposes retr
 
 it('tries the backup after the startup deadline and destroys media and timers on unmount', () => {
   const { unmount } = render(<LivePlayer channel={channel} />);
-  act(() => jest.advanceTimersByTime(15000));
+  act(() => jest.advanceTimersByTime(20000));
   expect(mockPlayers).toHaveLength(2);
   expect(mockHls[0].stopLoad).toHaveBeenCalledTimes(1);
   const player = mockPlayers[1];
@@ -154,7 +160,7 @@ it('retains the user sound settings across a channel switch', () => {
   mockPlayers[0].video.volume = 0.35;
   const second = {
     ...channel,
-    id: 'cn:second',
+    id: 'custom:second',
     name: '第二频道',
     urls: ['https://example.com/second.m3u8'],
   };
@@ -162,4 +168,15 @@ it('retains the user sound settings across a channel switch', () => {
   expect(mockPlayers[1].options).toEqual(
     expect.objectContaining({ muted: false, volume: 0.35 })
   );
+});
+
+it('uses same-origin compatibility for built-in channels and allows direct playback', () => {
+  render(<LivePlayer channel={{ ...channel, id: 'cn:fixture' }} />);
+  fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
+  expect(mockPlayers[0].options.url).toBe(
+    '/api/live/stream?channel=cn%3Afixture&line=0'
+  );
+  fireEvent.click(screen.getByRole('button', { name: '直连播放' }));
+  fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
+  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[0]);
 });

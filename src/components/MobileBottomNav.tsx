@@ -2,7 +2,16 @@
 
 'use client';
 
-import { Clover, Film, Home, Radio, Search, Star, Tv } from 'lucide-react';
+import {
+  Baby,
+  Clover,
+  Film,
+  Home,
+  Radio,
+  Search,
+  Star,
+  Tv,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -33,24 +42,26 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
       label: '剧集',
       href: '/douban?type=tv',
     },
-    { icon: Radio, label: '电视', href: '/live' },
     {
       icon: Clover,
       label: '综艺',
       href: '/douban?type=show',
     },
+    { icon: Baby, label: '少儿', href: '/kids' },
+    { icon: Radio, label: '电视', href: '/live' },
   ]);
 
   useEffect(() => {
     const runtimeConfig = (window as any).RUNTIME_CONFIG;
     if (runtimeConfig?.CUSTOM_CATEGORIES?.length > 0) {
       setNavItems((prevItems) => [
-        ...prevItems,
+        ...prevItems.filter((item) => item.href !== '/live'),
         {
           icon: Star,
           label: '自定义',
           href: '/douban?type=custom',
         },
+        ...prevItems.filter((item) => item.href === '/live'),
       ]);
     }
   }, []);
@@ -91,7 +102,7 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
               className='flex-shrink-0'
               style={{
                 flex: '1 0 0',
-                minWidth: navItems.length > 6 ? '56px' : 0,
+                minWidth: navItems.length > 7 ? '56px' : 0,
               }}
             >
               <Link

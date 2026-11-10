@@ -21,3 +21,8 @@ it.each(['//evil.test', '/\\evil.test', 'https://evil.test', '/play', null])(
     expect(browseReturn(value)).toBe('/');
   }
 );
+
+it('preserves the kids age filter and live browse return targets', () => {
+  expect(browseReturn('/kids?age=8-12')).toBe('/kids?age=8-12');
+  expect(browseReturn('/live')).toBe('/live');
+});
