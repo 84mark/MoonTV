@@ -81,7 +81,9 @@ const withPWA = require('next-pwa')({
     {
       // Source edits must affect the next request, even on a slow connection.
       urlPattern: ({ url }) =>
-        /^\/api\/(?:search(?:\/|$)|detail$|sources(?:\/|$))/.test(url.pathname),
+        /^\/api\/(?:search(?:\/|$)|detail$|live$|sources(?:\/|$))/.test(
+          url.pathname
+        ),
       handler: 'NetworkOnly',
       method: 'GET',
       options: { fetchOptions: { cache: 'no-store' } },

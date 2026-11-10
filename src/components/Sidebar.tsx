@@ -2,7 +2,17 @@
 
 'use client';
 
-import { Clover, Film, Home, Menu, Moon, Search, Star, Tv } from 'lucide-react';
+import {
+  Clover,
+  Film,
+  Home,
+  Menu,
+  Moon,
+  Radio,
+  Search,
+  Star,
+  Tv,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -34,7 +44,12 @@ const Logo = () => {
       href='/'
       className='flex items-center justify-center h-16 select-none hover:opacity-80 transition-opacity duration-200'
     >
-      <span className='app-brand flex items-center gap-2.5 text-xl'><span className='brand-mark'><Moon className='h-[18px] w-[18px]' strokeWidth={1.7} /></span>{siteName}</span>
+      <span className='app-brand flex items-center gap-2.5 text-xl'>
+        <span className='brand-mark'>
+          <Moon className='h-[18px] w-[18px]' strokeWidth={1.7} />
+        </span>
+        {siteName}
+      </span>
     </Link>
   );
 };
@@ -133,6 +148,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
       label: '剧集',
       href: '/douban?type=tv',
     },
+    { icon: Radio, label: '电视', href: '/live' },
     {
       icon: Clover,
       label: '综艺',
@@ -160,7 +176,9 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
       <div className='hidden md:flex'>
         <aside
           data-sidebar
-          className={`glass-sidebar fixed transition-all duration-300 z-30 ${isCollapsed ? 'w-16' : 'w-56'}`}
+          className={`glass-sidebar fixed transition-all duration-300 z-30 ${
+            isCollapsed ? 'w-16' : 'w-56'
+          }`}
         >
           <div className='flex h-full flex-col'>
             {/* 顶部 Logo 区域 */}
