@@ -37,8 +37,11 @@ export async function GET(request: Request) {
       );
       const posterOnly = params.get('posterOnly') === '1';
       const matchingSuggestions =
-        posterOnly && preferredKind && Array.isArray(suggestions)
-          ? suggestions.filter((item) => item?.type === preferredKind)
+        // The suggestion API labels TV subjects as `movie` too; it is not
+        // a reliable movie/series discriminator. Exact title/year matching
+        // still prevents selecting a similarly named season or remake.
+        posterOnly && preferredKind === 'movie' && Array.isArray(suggestions)
+          ? suggestions.filter((item) => item?.type === 'movie')
           : suggestions;
       const result = matchDoubanSubjects(matchingSuggestions, title, year);
       if (!result.subject)
@@ -64,7 +67,11 @@ export async function GET(request: Request) {
         if (poster)
           return NextResponse.json(
             {
-              subject: { ...result.subject, poster, kind: suggestion.type },
+              subject: {
+                ...result.subject,
+                poster,
+                kind: preferredKind || suggestion.type,
+              },
               candidates: [],
             },
             { headers }

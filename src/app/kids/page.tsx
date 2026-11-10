@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import { KIDS_TITLES, KidsTitle } from '@/lib/kids';
+import { getKidsPosterFallback } from '@/lib/kids-posters';
 import { kidsSearchTitle } from '@/lib/kids-resources';
 
 import PageLayout from '@/components/PageLayout';
@@ -90,7 +91,7 @@ function KidsPageClient() {
       const controller = new AbortController();
       posterRequests.current.set(seed.id, controller);
       void (async () => {
-        const timer = setTimeout(() => controller.abort(), 8000);
+        const timer = setTimeout(() => controller.abort(), 12000);
         let url = '';
         try {
           const request = new URLSearchParams({
@@ -326,7 +327,8 @@ function KidsPageClient() {
                   from='douban'
                   title={seed.name}
                   query={kidsSearchTitle(seed)}
-                  poster={posters[seed.id] || ''}
+                  poster={posters[seed.id] || getKidsPosterFallback(seed)}
+                  fallbackPoster={getKidsPosterFallback(seed)}
                   year={seed.year}
                   type={seed.kind}
                   doubanType={seed.kind}

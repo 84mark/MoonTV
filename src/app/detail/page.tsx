@@ -59,12 +59,13 @@ function DetailPageClient() {
     setError('');
     setLoading(true);
     async function load() {
-      let fallback: SearchResult | null = null;
       const params = new URLSearchParams(query);
       const sourceId = params.get('id');
       const sourceKey = params.get('source');
-      // Retain the selected source's synopsis when Douban is unavailable.
-      if (sourceId && sourceKey) {
+      // Source details and metadata start together: a slow source must never
+      // hold up the introduction. Its synopsis remains a useful fallback.
+      const sourceRequest = (async (): Promise<SearchResult | null> => {
+        if (!sourceId || !sourceKey) return null;
         try {
           const response = await fetch(
             `/api/detail?${new URLSearchParams({
@@ -73,16 +74,19 @@ function DetailPageClient() {
             })}`,
             { signal: controller.signal, cache: 'no-store' }
           );
-          if (response.ok) {
-            fallback = await response.json();
-            if (fallback && !kidsPlaybackMatches(params, fallback))
-              fallback = null;
-            if (!controller.signal.aborted) setSource(fallback);
-          }
+          if (!response.ok) return null;
+          const detail: SearchResult = await response.json();
+          if (!detail || !kidsPlaybackMatches(params, detail)) return null;
+          if (!controller.signal.aborted) setSource(detail);
+          return detail;
         } catch {
-          /* Douban can still supply the details. */
+          return null;
         }
-      }
+      })();
+      const suppliedId = chosenId || params.get('douban_id') || '';
+      // Legacy source-only links need the source title before metadata lookup.
+      const fallback =
+        !title && !validDoubanId(suppliedId) ? await sourceRequest : null;
       if (controller.signal.aborted) return;
       const supplied =
         chosenId ||
@@ -139,7 +143,11 @@ function DetailPageClient() {
     ? getBuiltinImageProxyUrl(searchParams.get('poster') || '') ||
       processImageUrl(searchParams.get('poster') || '')
     : '';
-  const intro = subject?.intro || source?.desc || '';
+  const intro =
+    subject?.intro ||
+    source?.desc ||
+    prepared?.sources.find((item) => item.desc)?.desc ||
+    '';
   // Forward every existing playback parameter, including source, prefer and search type.
   const playParams = new URLSearchParams(query);
   if (validDoubanId(chosenId)) playParams.set('douban_id', chosenId);
@@ -248,26 +256,18 @@ function DetailPageClient() {
                 主演：{subject.actors.join(' / ')}
               </p>
             ) : null}
-            {!hasEpisodes &&
-              (noPlayableSource ? (
-                <button
-                  disabled
-                  className='mt-6 inline-flex items-center gap-2 rounded-xl bg-gray-300 px-7 py-3 font-semibold text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                >
-                  ▶ 暂无可用片源
-                </button>
-              ) : (
-                <Link
-                  href={playbackLink}
-                  className='mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-blue-700'
-                >
-                  ▶ 立即播放
-                </Link>
-              ))}
+            {!hasEpisodes && (
+              <Link
+                href={playbackLink}
+                className='mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-blue-700'
+              >
+                ▶ 立即播放
+              </Link>
+            )}
             <div className='mt-3 text-xs text-gray-500' aria-live='polite'>
               {noPlayableSource ? (
                 <>
-                  <span>当前所有源均不可用</span>
+                  <span>暂未检测到可用片源，仍可尝试播放</span>
                   <button
                     onClick={() => setProbeRetry((value) => value + 1)}
                     className='ml-3 text-blue-600 hover:underline'
@@ -302,6 +302,18 @@ function DetailPageClient() {
               )}
             </div>
           </div>
+        </section>
+        <section className='glass-panel detail-section'>
+          <h2 className='mb-4 text-xl font-semibold'>剧情简介</h2>
+          {intro ? (
+            <p className='whitespace-pre-line break-words text-sm leading-8 text-gray-600 dark:text-gray-300'>
+              {intro}
+            </p>
+          ) : (
+            <p className='text-sm text-gray-500'>
+              {loading ? '正在加载影片资料…' : '暂无剧情简介，仍可进入播放。'}
+            </p>
+          )}
         </section>
         {hasEpisodes && episodeSource && (
           <section className='glass-panel detail-section' aria-label='剧集选集'>
@@ -339,18 +351,6 @@ function DetailPageClient() {
             </div>
           </section>
         )}
-        <section className='glass-panel detail-section'>
-          <h2 className='mb-4 text-xl font-semibold'>剧情简介</h2>
-          {intro ? (
-            <p className='whitespace-pre-line break-words text-sm leading-8 text-gray-600 dark:text-gray-300'>
-              {intro}
-            </p>
-          ) : (
-            <p className='text-sm text-gray-500'>
-              {loading ? '正在加载影片资料…' : '暂无剧情简介，仍可进入播放。'}
-            </p>
-          )}
-        </section>
         {error && (
           <p role='status' className='text-sm text-gray-500'>
             {error}{' '}

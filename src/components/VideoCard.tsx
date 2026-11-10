@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { CheckCircle, Heart, Link, Play } from 'lucide-react';
+import { CheckCircle, Heart, Info, Link } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -13,7 +13,7 @@ import {
   saveFavorite,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
-import { getBuiltinImageProxyUrl } from '@/lib/image-proxy';
+import { getBuiltinImageProxyUrl, getDoubanImageUrl } from '@/lib/image-proxy';
 import { SearchResult } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 
@@ -25,6 +25,7 @@ interface VideoCardProps {
   title?: string;
   query?: string;
   poster?: string;
+  fallbackPoster?: string;
   episodes?: number;
   source_name?: string;
   progress?: number;
@@ -46,6 +47,7 @@ export default function VideoCard({
   title = '',
   query = '',
   poster = '',
+  fallbackPoster = '',
   episodes,
   source,
   source_name,
@@ -65,7 +67,7 @@ export default function VideoCard({
   const router = useRouter();
   const [favorited, setFavorited] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [failedPosterSrc, setFailedPosterSrc] = useState<string | null>(null);
+  const [failedPosterUrls, setFailedPosterUrls] = useState<string[]>([]);
 
   const isAggregate = from === 'search' && !!items?.length;
 
@@ -107,12 +109,23 @@ export default function VideoCard({
   const actualTitle = aggregateData?.first.title ?? title;
   const actualPoster = aggregateData?.first.poster ?? poster;
   const posterSrc = processImageUrl(actualPoster);
-  // A previously saved custom proxy may no longer work. Retry Douban posters
-  // through this site's endpoint once, without looping on permanent errors.
+  // Try the configured proxy, built-in proxy, then the public CDN once each.
+  const imageCandidates = Array.from(
+    new Set(
+      [
+        posterSrc,
+        getBuiltinImageProxyUrl(actualPoster),
+        getDoubanImageUrl(actualPoster)?.href,
+        fallbackPoster,
+      ].filter((url): url is string => !!url)
+    )
+  );
   const imageSrc =
-    failedPosterSrc === posterSrc
-      ? getBuiltinImageProxyUrl(actualPoster) || posterSrc
-      : posterSrc;
+    imageCandidates.find((url) => !failedPosterUrls.includes(url)) || '';
+  useEffect(() => {
+    setFailedPosterUrls([]);
+    setIsLoading(false);
+  }, [actualPoster, fallbackPoster]);
   const actualSource = aggregateData?.first.source ?? source;
   const actualId = aggregateData?.first.id ?? id;
   const actualDoubanId = String(
@@ -245,7 +258,7 @@ export default function VideoCard({
       (currentEpisode || 0) > 0
     )
       params.set('episode', String(currentEpisode));
-    router.push(`/play?${params}`);
+    router.push(`/detail?${params}`);
   }, [
     from,
     actualSource,
@@ -313,7 +326,7 @@ export default function VideoCard({
       onClick={handleClick}
       role='link'
       tabIndex={0}
-      aria-label={`播放 ${actualTitle}`}
+      aria-label={`查看 ${actualTitle} 介绍`}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && event.key === 'Enter')
           handleClick();
@@ -324,27 +337,30 @@ export default function VideoCard({
         {/* 骨架屏 */}
         {!isLoading && <ImagePlaceholder aspectRatio='aspect-[2/3]' />}
         {/* 图片 */}
-        <Image
-          src={imageSrc}
-          alt={actualTitle}
-          fill
-          className='object-cover'
-          referrerPolicy='no-referrer'
-          onLoadingComplete={() => setIsLoading(true)}
-          onError={() => {
-            if (imageSrc !== getBuiltinImageProxyUrl(actualPoster)) {
-              setFailedPosterSrc(posterSrc);
-            }
-          }}
-        />
+        {imageSrc && (
+          <Image
+            src={imageSrc}
+            alt={actualTitle}
+            fill
+            className='object-cover'
+            referrerPolicy='no-referrer'
+            onLoad={() => setIsLoading(true)}
+            onError={() => {
+              setIsLoading(false);
+              setFailedPosterUrls((urls) =>
+                urls.includes(imageSrc) ? urls : [...urls, imageSrc]
+              );
+            }}
+          />
+        )}
 
         {/* 悬浮遮罩 */}
         <div className='absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 ease-in-out group-hover:opacity-100' />
 
-        {/* 播放入口 */}
+        {/* 介绍入口 */}
         {config.showPlayButton && (
           <div className='absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-300 ease-in-out delay-75 group-hover:opacity-100 group-hover:scale-100'>
-            <Play
+            <Info
               size={50}
               strokeWidth={0.8}
               className='text-white fill-transparent transition-all duration-300 ease-out hover:fill-blue-500 hover:scale-[1.1]'

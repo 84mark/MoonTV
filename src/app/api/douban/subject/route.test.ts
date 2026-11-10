@@ -75,3 +75,25 @@ it('keeps normal detail and gallery loading unchanged', async () => {
   expect(mockSubject).toHaveBeenCalledWith('123456', 'movie');
   expect(mockRelated).toHaveBeenCalledTimes(1);
 });
+
+it('accepts a TV suggestion labelled movie by Douban without dropping its poster', async () => {
+  mockJson.mockResolvedValue([
+    {
+      ...suggestion,
+      title: '小猪佩奇 第一季',
+      year: '2004',
+      type: 'movie',
+    },
+  ]);
+  const response = await GET(
+    new Request(
+      'https://example.com/api/douban/subject?title=小猪佩奇%20第一季&kind=tv&posterOnly=1'
+    )
+  );
+  expect((await response.json()).subject).toMatchObject({
+    id: suggestion.id,
+    poster: suggestion.img,
+    kind: 'tv',
+  });
+  expect(mockSubject).not.toHaveBeenCalled();
+});

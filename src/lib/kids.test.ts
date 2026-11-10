@@ -35,7 +35,7 @@ it('combines age, theme and case-insensitive keyword filtering without leaking o
 it('sends every pick to source discovery with its content type and an age-preserving return route', () => {
   for (const item of KIDS_TITLES) {
     const url = new URL(kidsDetailHref(item, item.age), 'https://tv.example');
-    expect(url.pathname).toBe('/play');
+    expect(url.pathname).toBe('/detail');
     expect(url.searchParams.get('title')).toBe(item.name);
     expect(url.searchParams.get('stype')).toBe(item.kind);
     expect(url.searchParams.get('douban_type')).toBe(item.kind);

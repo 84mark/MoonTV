@@ -46,7 +46,7 @@ it('does not let an old disabled custom-proxy setting disable the built-in proxy
   expect(processImageUrl(poster)).toBe(getBuiltinImageProxyUrl(poster));
 });
 
-it('retries a broken custom proxy through the built-in endpoint exactly once', () => {
+it('tries the built-in proxy then public CDN without retry loops', () => {
   const customProxy = 'https://old-proxy.example/?url=';
   localStorage.setItem('imageProxyUrl', customProxy);
   localStorage.setItem('enableImageProxy', 'true');
@@ -61,7 +61,7 @@ it('retries a broken custom proxy through the built-in endpoint exactly once', (
   fireEvent.error(image);
   expect(image).toHaveAttribute('src', getBuiltinImageProxyUrl(poster));
   fireEvent.error(image);
-  expect(image).toHaveAttribute('src', getBuiltinImageProxyUrl(poster));
+  expect(image).toHaveAttribute('src', poster);
 
   const nextPoster = poster.replace('p480747492', 'p480747493');
   rerender(<VideoCard from='douban' title='剧集' poster={nextPoster} />);
@@ -82,7 +82,7 @@ it('leaves non-Douban posters alone and still supports custom image proxies', ()
   );
 });
 
-it('opens the player directly with the existing Douban identity', () => {
+it('opens the introduction with the existing Douban identity', () => {
   render(
     <VideoCard
       from='douban'
@@ -93,12 +93,12 @@ it('opens the player directly with the existing Douban identity', () => {
       type='movie'
     />
   );
-  fireEvent.click(screen.getByRole('link', { name: /播放 肖申克的救赎/ }));
+  fireEvent.click(screen.getByRole('link', { name: /查看 肖申克的救赎 介绍/ }));
   const url = new URL(
     mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
     'https://example.test'
   );
-  expect(url.pathname).toBe('/play');
+  expect(url.pathname).toBe('/detail');
   expect(url.searchParams.get('douban_id')).toBe('1292052');
   expect(url.searchParams.get('title')).toBe('肖申克的救赎');
   expect(url.searchParams.get('stype')).toBe('movie');
@@ -115,7 +115,9 @@ it('carries the Douban TV type separately without restricting variety-show playb
       doubanType='tv'
     />
   );
-  fireEvent.click(screen.getByRole('link', { name: /播放 现在就出发 第四季/ }));
+  fireEvent.click(
+    screen.getByRole('link', { name: /查看 现在就出发 第四季 介绍/ })
+  );
   const url = new URL(
     mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
     'https://example.test'
@@ -129,7 +131,7 @@ it.each(['movie', 'tv', 'show'])(
   (type) => {
     window.history.replaceState({}, '', `/douban?type=${type}`);
     render(<VideoCard from='douban' title='剧集' poster={poster} />);
-    fireEvent.click(screen.getByRole('link', { name: /播放 剧集/ }));
+    fireEvent.click(screen.getByRole('link', { name: /查看 剧集 介绍/ }));
     const url = new URL(
       mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
       'https://example.test'
@@ -153,12 +155,14 @@ it('keeps the saved children language when reopening a continue-watching card', 
       kidsLanguage='multi:en+zh-CN'
     />
   );
-  fireEvent.click(screen.getByRole('link', { name: '播放 小猪佩奇 第一季' }));
+  fireEvent.click(
+    screen.getByRole('link', { name: '查看 小猪佩奇 第一季 介绍' })
+  );
   const url = new URL(
     mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
     'https://example.test'
   );
-  expect(url.pathname).toBe('/play');
+  expect(url.pathname).toBe('/detail');
   expect(url.searchParams.get('source')).toBe('family');
   expect(url.searchParams.get('id')).toBe('english-1');
   expect(url.searchParams.get('episode')).toBe('3');
@@ -175,19 +179,19 @@ it('preserves the kids catalogue constraint without inventing an audio language'
       kidsId='insideout'
     />
   );
-  fireEvent.click(screen.getByRole('link', { name: '播放 头脑特工队' }));
+  fireEvent.click(screen.getByRole('link', { name: '查看 头脑特工队 介绍' }));
   const url = new URL(
     mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
     'https://example.test'
   );
-  expect(url.pathname).toBe('/play');
+  expect(url.pathname).toBe('/detail');
   expect(url.searchParams.get('kids_id')).toBe('insideout');
   expect(url.searchParams.has('kids_language')).toBe(false);
   expect(url.searchParams.get('stype')).toBe('movie');
 });
 
 it.each(['favorite', 'search'] as const)(
-  'opens %s cards directly in the player and preserves source identifiers',
+  'opens %s cards in the introduction and preserves source identifiers',
   (from) => {
     render(
       <VideoCard
@@ -200,12 +204,14 @@ it.each(['favorite', 'search'] as const)(
         query='电影'
       />
     );
-    fireEvent.click(screen.getByRole('link', { name: '播放 电影 & 特别篇' }));
+    fireEvent.click(
+      screen.getByRole('link', { name: '查看 电影 & 特别篇 介绍' })
+    );
     const url = new URL(
       mockPush.mock.calls[mockPush.mock.calls.length - 1][0],
       'https://example.test'
     );
-    expect(url.pathname).toBe('/play');
+    expect(url.pathname).toBe('/detail');
     expect(url.searchParams.get('source')).toBe('source-key');
     expect(url.searchParams.get('id')).toBe('one&two');
     expect(url.searchParams.get('title')).toBe('电影 & 特别篇');
@@ -213,3 +219,24 @@ it.each(['favorite', 'search'] as const)(
     expect(url.searchParams.get('stitle')).toBe('电影');
   }
 );
+
+it('uses the catalogue fallback after the proxy and public image fail, then stops retrying', () => {
+  const fallback = 'https://api.bgm.tv/v0/subjects/119035/image?type=medium';
+  render(
+    <VideoCard
+      from='douban'
+      title='动画'
+      poster={poster}
+      fallbackPoster={fallback}
+    />
+  );
+  fireEvent.error(screen.getByRole('img'));
+  expect(screen.getByRole('img')).toHaveAttribute('src', poster);
+  fireEvent.error(screen.getByRole('img'));
+  expect(screen.getByRole('img')).toHaveAttribute('src', fallback);
+  fireEvent.error(screen.getByRole('img'));
+  expect(screen.queryByRole('img')).toBeNull();
+  expect(
+    screen.getByRole('link', { name: '查看 动画 介绍' })
+  ).toBeInTheDocument();
+});

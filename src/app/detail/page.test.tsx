@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
+import { preparePlayback } from '@/lib/playback-preload';
+
 import DetailPage from './page';
 
 let query = '';
@@ -8,7 +10,7 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(query),
 }));
 jest.mock('@/lib/playback-preload', () => ({
-  preparePlayback: () => ({
+  preparePlayback: jest.fn(() => ({
     id: 'fixture',
     snapshot: {
       status: 'searching',
@@ -19,7 +21,7 @@ jest.mock('@/lib/playback-preload', () => ({
       completed: 0,
     },
     subscribe: () => () => undefined,
-  }),
+  })),
 }));
 jest.mock('@/components/PageLayout', () => ({
   __esModule: true,
@@ -151,5 +153,53 @@ it('puts playable episode links beside the poster and retains the original categ
   expect(screen.getByRole('link', { name: /返回浏览/ })).toHaveAttribute(
     'href',
     '/douban?type=tv'
+  );
+});
+
+it('loads introduction and starts source detection without waiting for source details', async () => {
+  query = 'title=肖申克的救赎&source=slow&id=101&year=1994';
+  (fetch as jest.Mock).mockImplementation((url: string) =>
+    url.startsWith('/api/detail?')
+      ? new Promise(() => undefined)
+      : Promise.resolve(response({ subject, candidates: [] }))
+  );
+  render(<DetailPage />);
+  expect(preparePlayback).toHaveBeenCalledWith(
+    new URLSearchParams(query).toString(),
+    false
+  );
+  expect(await screen.findByText('剧情简介内容')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /立即播放/ })).toHaveAttribute(
+    'href',
+    expect.stringContaining('/play?')
+  );
+  expect(fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/api/douban/subject?'),
+    expect.objectContaining({ signal: expect.any(AbortSignal) })
+  );
+});
+
+it('does not block playback when background probes cannot confirm a source', async () => {
+  query = 'title=测试';
+  (preparePlayback as jest.Mock).mockReturnValueOnce({
+    id: 'unconfirmed',
+    snapshot: {
+      status: 'complete',
+      sources: [],
+      results: new Map(),
+      selected: null,
+      firstSource: null,
+      completed: 0,
+    },
+    subscribe: () => () => undefined,
+  });
+  (fetch as jest.Mock).mockResolvedValue(
+    response({ subject: null, candidates: [] })
+  );
+  render(<DetailPage />);
+  await screen.findByText('暂未检测到可用片源，仍可尝试播放');
+  expect(screen.getByRole('link', { name: /立即播放/ })).toHaveAttribute(
+    'href',
+    expect.stringContaining('/play?')
   );
 });
