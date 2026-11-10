@@ -3,6 +3,7 @@ import {
   mergeLiveChannels,
   seededLiveChannels,
 } from './live';
+import subscriptionSnapshot from './live-subscription-snapshot.json';
 import {
   BEST_FAN_SUBSCRIPTION_URL,
   DAILY_CHANNELS_URL,
@@ -21,18 +22,30 @@ const stationName = (name: string) =>
     .replace(/^(CCTV)[-\s]*(\d+\+?)[-\s]*[\u4e00-\u9fff].*$/i, '$1$2')
     .replace(/(?:4K|8K|UHD|FHD|HD|高清|超清|标清|频道|[\s（）()_-])/gi, '')
     .toLowerCase();
+let subscriptionChannels = subscriptionSnapshot.channels as ReturnType<
+  typeof subscriptionLiveChannels
+>;
+const initialSeeds = seededLiveChannels();
+const initialChannels = mergeLiveChannels([
+  ...subscriptionChannels.map((channel) => {
+    const known = initialSeeds.find(
+      (seed) => stationName(seed.name) === stationName(channel.name)
+    );
+    return known ? { ...channel, id: known.id } : channel;
+  }),
+  ...initialSeeds,
+]);
 let saved = {
-  channels: seededLiveChannels(),
+  channels: initialChannels,
   updatedAt: 0,
   fallback: true,
   subscription: {
     url: BEST_FAN_SUBSCRIPTION_URL,
-    updatedAt: 0,
-    channelCount: 0,
+    updatedAt: Date.parse(subscriptionSnapshot.capturedAt),
+    channelCount: subscriptionChannels.length,
     fallback: true,
   },
 };
-let subscriptionChannels: ReturnType<typeof subscriptionLiveChannels> = [];
 let cachedAt = 0;
 let refreshAfter = 60000;
 let pending: Promise<typeof saved> | null = null;

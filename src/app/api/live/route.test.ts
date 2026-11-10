@@ -92,10 +92,21 @@ it('retains reviewed seeds on outage and does not claim a successful update', as
   const body = await response.json();
   expect(response.headers.get('Cache-Control')).toBe('private, no-store');
   expect(body).toMatchObject({
-    channels: expect.arrayContaining(seededLiveChannels()),
     updatedAt: 0,
     fallback: true,
   });
+  for (const seed of seededLiveChannels()) {
+    const channel = body.channels.find(
+      (item: { id: string }) => item.id === seed.id
+    );
+    expect(channel.urls).toEqual(expect.arrayContaining(seed.urls));
+  }
+  expect(body.subscription).toMatchObject({ channelCount: 52, fallback: true });
+  expect(body.subscription.updatedAt).toBeGreaterThan(0);
+  expect(
+    body.channels.find((item: { name: string }) => item.name === 'CCTV1').urls
+      .length
+  ).toBeGreaterThan(1);
   expect(fetchMock).toHaveBeenCalledTimes(feeds.length + 3);
 });
 it('only refreshes approved stations on trusted CDNs and adds decoded HTTPS HD satellites', async () => {
