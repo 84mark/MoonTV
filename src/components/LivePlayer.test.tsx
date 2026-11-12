@@ -83,6 +83,11 @@ beforeEach(() => {
   mockPlayers.length = 0;
   mockHls.length = 0;
   mockProbe.mockClear();
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ url: 'https://proxy.example/stream?token=signed' }),
+  });
 });
 afterEach(() => {
   // Reset the session sound preference through the real cleanup path.
@@ -172,105 +177,152 @@ it('retains the user sound settings across a channel switch', () => {
   );
 });
 
-it('starts domestic channels directly and retries the same source through Cloudflare before the backup', () => {
-  render(<LivePlayer channel={{ ...channel, id: 'cn:fixture' }} />);
-  expect(mockProbe.mock.calls[0][0]).toEqual(channel.urls);
-  fireEvent.click(screen.getByRole('button', { name: '跳过检测，直接播放' }));
+it('plays only the active source, never starts a source probe, and retries it via the independent worker', async () => {
+  render(<LivePlayer channel={{ ...channel, id: 'iptv:fixture.cn' }} />);
+  expect(mockProbe).not.toHaveBeenCalled();
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
+  await act(async () => mockHls[0].events.error('error', { fatal: true }));
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/live/ticket',
+    expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ url: channel.urls[0] }),
+    })
+  );
+  expect(mockPlayers[1].options.url).toBe(
+    'https://proxy.example/stream?token=signed'
+  );
+  act(() => mockHls[1].events.error('error', { fatal: true }));
+  expect(mockPlayers[2].options.url).toBe(channel.urls[1]);
+});
+it('starts overseas HTTPS directly and uses the worker only when explicitly selected', async () => {
+  render(
+    <LivePlayer
+      channel={{ ...channel, id: 'iptv:fixture.us', region: 'overseas' }}
+    />
+  );
+  expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
+  expect(global.fetch).not.toHaveBeenCalled();
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Cloudflare 转发' }))
+  );
+  expect(mockPlayers[1].options.url).toBe(
+    'https://proxy.example/stream?token=signed'
+  );
+  fireEvent.click(screen.getByRole('button', { name: '直连播放' }));
+  expect(mockPlayers[2].options.url).toBe(channel.urls[0]);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+});
+it('requests a signed ticket for HTTP and required Referer streams', async () => {
+  const url = 'http://example.com/live.m3u8';
+  await act(async () => {
+    render(
+      <LivePlayer
+        channel={{
+          ...channel,
+          id: 'iptv:fixture.cn',
+          urls: [url],
+          requestHeaders: {
+            [url]: {
+              referer: 'https://station.example/',
+              userAgent: 'StationPlayer/1.0',
+            },
+          },
+        }}
+      />
+    );
+  });
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/live/ticket',
+    expect.objectContaining({
+      body: JSON.stringify({
+        url,
+        referer: 'https://station.example/',
+        userAgent: 'StationPlayer/1.0',
+      }),
+    })
+  );
+  expect(mockPlayers[0].options.url).toBe(
+    'https://proxy.example/stream?token=signed'
+  );
+});
+it('falls back to HTTPS direct on an unconfigured worker without retrying the worker for every line', async () => {
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok: false,
+    status: 503,
+    json: async () => ({ error: '独立代理尚未配置' }),
+  });
+  await act(async () => {
+    render(
+      <LivePlayer
+        channel={{
+          ...channel,
+          id: 'iptv:fixture.us',
+          region: 'overseas',
+          relayRequired: channel.urls,
+        }}
+      />
+    );
+  });
   expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
   act(() => mockHls[0].events.error('error', { fatal: true }));
-  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(
-    '/api/live/stream?channel=cn%3Afixture&line=0'
-  );
-  act(() => mockHls[mockHls.length - 1].events.error('error', { fatal: true }));
-  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[1]);
-  expect(screen.getByRole('button', { name: '自动选择' })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  );
+  expect(mockPlayers[1].options.url).toBe(channel.urls[1]);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
 });
-it('automatically relays only the source explicitly listed as requiring compatibility', () => {
+it('does not replay a failed direct URL when its worker fallback is unconfigured', async () => {
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok: false,
+    status: 503,
+    json: async () => ({ error: '独立代理尚未配置' }),
+  });
   render(
+    <LivePlayer
+      channel={{ ...channel, id: 'iptv:fixture.cn', region: 'domestic' }}
+    />
+  );
+  await act(async () => mockHls[0].events.error('error', { fatal: true }));
+  expect(mockPlayers).toHaveLength(2);
+  expect(mockPlayers[1].options.url).toBe(channel.urls[1]);
+});
+it('cancels pending tickets and ignores late responses after unmount', async () => {
+  let resolve: (response: unknown) => void = () => undefined;
+  (global.fetch as jest.Mock).mockImplementation(
+    () =>
+      new Promise((r) => {
+        resolve = r;
+      })
+  );
+  const { unmount } = render(
     <LivePlayer
       channel={{
         ...channel,
-        id: 'cn:fixture',
-        relayRequired: [channel.urls[1]],
+        id: 'iptv:fixture.us',
+        region: 'overseas',
+        relayRequired: channel.urls,
       }}
     />
   );
-  expect(mockProbe.mock.calls[0][0]).toEqual([
-    channel.urls[0],
-    '/api/live/stream?channel=cn%3Afixture&line=1',
-  ]);
-  fireEvent.click(screen.getByRole('button', { name: '线路 2' }));
-  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(
-    '/api/live/stream?channel=cn%3Afixture&line=1'
+  const signal = (global.fetch as jest.Mock).mock.calls[0][1].signal;
+  unmount();
+  expect(signal.aborted).toBe(true);
+  await act(async () =>
+    resolve({
+      ok: true,
+      json: async () => ({ url: 'https://proxy.example/stale' }),
+    })
   );
-  fireEvent.click(screen.getByRole('button', { name: '线路 1' }));
-  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[0]);
-  fireEvent.click(screen.getByRole('button', { name: '直连播放' }));
-  fireEvent.click(screen.getByRole('button', { name: '线路 2' }));
-  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[1]);
+  expect(mockPlayers).toHaveLength(0);
+  expect(jest.getTimerCount()).toBe(0);
 });
-it('routes overseas channels through Cloudflare automatically and respects manual direct mode', () => {
-  render(<LivePlayer channel={{ ...channel, id: 'world:fixture' }} />);
-  expect(mockPlayers[0].options.url).toBe(
-    '/api/live/stream?channel=world%3Afixture&line=0'
-  );
-  expect(screen.getByText(/当前线路：Cloudflare 转发/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '直连播放' }));
-  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[0]);
-  act(() => mockHls[mockHls.length - 1].events.error('error', { fatal: true }));
-  expect(mockPlayers[mockPlayers.length - 1].options.url).toBe(channel.urls[1]);
-});
-it('relays HTTP domestic sources to avoid mixed content and labels the actual route', () => {
-  render(
-    <LivePlayer
-      channel={{
-        ...channel,
-        id: 'cn:http',
-        urls: ['http://example.com/live.m3u8'],
-      }}
-    />
-  );
-  expect(mockPlayers[0].options.url).toBe(
-    '/api/live/stream?channel=cn%3Ahttp&line=0'
-  );
-  expect(
-    screen.getByText(/Cloudflare 兼容转发（HTTP 源）/)
-  ).toBeInTheDocument();
-});
-it('starts playback without waiting for multi-source probes to finish', () => {
-  render(<LivePlayer channel={{ ...channel, id: 'cn:fixture' }} />);
-  expect(mockPlayers).toHaveLength(1);
-  expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
-});
-it('never relays user-imported channels even if imported data contains a relay marker', () => {
+it('never relays custom imports or starts bulk probes', () => {
   render(<LivePlayer channel={{ ...channel, relayRequired: channel.urls }} />);
-  expect(mockProbe.mock.calls[0][0]).toEqual(channel.urls);
   expect(mockPlayers[0].options.url).toBe(channel.urls[0]);
-  expect(
-    screen.queryByRole('button', { name: 'Cloudflare 转发' })
-  ).not.toBeInTheDocument();
+  expect(mockProbe).not.toHaveBeenCalled();
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Cloudflare 转发' })).toBeNull();
 });
 
-it('uses an 8 second direct deadline then 12 seconds for Cloudflare before advancing', () => {
-  render(<LivePlayer channel={{ ...channel, id: 'cn:fixture' }} />);
-  act(() => jest.advanceTimersByTime(7999));
-  expect(mockPlayers).toHaveLength(1);
-  act(() => jest.advanceTimersByTime(1));
-  expect(mockPlayers).toHaveLength(2);
-  expect(mockPlayers[1].options.url).toBe(
-    '/api/live/stream?channel=cn%3Afixture&line=0'
-  );
-  expect(screen.getByText(/首帧等待超过 8 秒/)).toBeInTheDocument();
-  act(() => jest.advanceTimersByTime(11999));
-  expect(mockPlayers).toHaveLength(2);
-  act(() => jest.advanceTimersByTime(1));
-  expect(mockPlayers).toHaveLength(3);
-  expect(mockPlayers[2].options.url).toBe(channel.urls[1]);
-  expect(screen.getByText(/首帧等待超过 12 秒/)).toBeInTheDocument();
-});
 it('keeps a 20 second recovery window after playback has started', () => {
   render(<LivePlayer channel={channel} />);
   act(() => mockPlayers[0].events['video:playing']());
@@ -289,4 +341,29 @@ it('does not extend the first-frame deadline when initial buffering repeats', ()
   act(() => mockPlayers[0].events['video:waiting']());
   act(() => jest.advanceTimersByTime(1000));
   expect(mockPlayers).toHaveLength(2);
+});
+
+it('never silently drops required User-Agent headers when the proxy is unavailable', async () => {
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok: false,
+    status: 503,
+    json: async () => ({ error: '独立代理尚未配置' }),
+  });
+  await act(async () => {
+    render(
+      <LivePlayer
+        channel={{
+          ...channel,
+          id: 'iptv:headers.cn',
+          urls: [channel.urls[0]],
+          requestHeaders: {
+            [channel.urls[0]]: { userAgent: 'RequiredPlayer' },
+          },
+        }}
+      />
+    );
+  });
+  expect(mockPlayers).toHaveLength(0);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: '重新连接' })).toBeInTheDocument();
 });

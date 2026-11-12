@@ -1,68 +1,57 @@
 # 电视直播
 
-`/live` 共用站点登录、主题、Artplayer/HLS.js 及实时速度／缓存浮窗。
-频道名后显示源数量；分为国内频道和海外频道，支持收藏、最近观看、搜索与自定义 M3U；购物频道在内置、上游报告和导入结果中统一过滤。
-桌面布局为左侧固定宽度频道栏、右侧播放器，频道列表独立滚动；手机播放器优先，频道列表在下方。切换分类和搜索不打断当前频道。电视导航置后，直播记录与影视点播独立。
+TV 使用 [iptv-org 全量订阅](https://iptv-org.github.io/iptv/index.m3u)。保留 MoonTV 登录与现有播放器，参考 [Wizju IPTV Player](https://github.com/j2jstudio/wizju-iptv-player) 的客户端目录和虚拟列表方式，不额外加载第二套 Vue/Video.js 应用。
 
-## 目录策略
+## 目录与界面
 
-默认目录 `src/lib/live-world.json` 为经官方网页与公开目录交叉核对的精选候选：
-DW、France24、NHK WORLD、Al Jazeera、Euronews、TRT World，及国内官方品牌域的高清卫视候选。
-国内种子优先保留官方品牌域 HTTPS HLS；包含 CGTN、宜昌、东莞、南宁、临沂、延安等近期上游检测快照。
-国际刷新仅允许各频道指定 tvg-id（保留语言后缀）及官方 CDN 白名单，排除匿名 restream 和明确低于 720p 线路。
-源地址参考 iptv-org 的公开列表，但官方页面存在、目录更新或 HTTP200 均不等于实际可播。
+- 目录下载、解析、国家／分类标签和搜索全部在浏览器完成，不再调用旧 `/api/live` 聚合目录。
+- 初次访问同时加载本站静态快照与官方订阅，快照先显示，官方成功后替换。快照按需获取，不进入全站离线预缓存。
+- IndexedDB 与内存缓存 6 小时；重新打开页面、定时检查或回到标签页时按需更新，手动更新可跳过缓存。官方失败保留旧目录。
+- 每 500 行解析让出主线程。频道列表仅渲染当前可见行和少量预留行，1 万条频道不会创建 1 万个卡片节点。
+- 按 `tvg-id` 保留稳定频道身份，支持国家、分类、地区、搜索、收藏和最近观看。分类和目录更新不打断当前直播。购物频道统一过滤。
+- `.github/workflows/iptv-catalog.yml` 每天同步官方静态快照；更新失败保留上次文件。GitHub 长期无活动可能暂停定时工作流，浏览器直接订阅仍独立运行。
+- 2026-11-12 快照含 11,461 条线路，经解析与购物／协议／地址过滤得到约 11,279 个 feed 条目，含 158 个 CN 条目。不同语言／画质 feed 不强行混为一台；目录数量不代表全部可播放。
 
-国内补充读取 gchust/iptv-daily 的 status/channels 报告：仅接受 48 小时内匹配的成功报告、明确通过实际解码且有视频帧、无错误的国内央视、卫视与地方台 HLS。接受可用标清，HTTP 源须通过兼容转发；RTP/UDP、非 HLS、购物频道及无有效检测证据条目不加入。
-2026-11-10 报告在本版过滤下得到 73 个国内频道，其中 24 个具有 HTTPS URL，49 个仅 HTTP；这不是本站播放成功计数。目录会随上游更新变化。
-公开报告仅标“上游检测通过”(upstream-decode)，不能当本站／用户所在地实测。48 小时后种子检测标记降级为待重测。
+## 低资源播放
 
-## 指定订阅
+自动模式优先直连无需特殊头的 HTTPS 线路（包括海外频道）。HTTP、订阅指定 Referer/User-Agent 或直连失败的线路才使用独立 Worker。用户仍可手动选择直连／转发。
 
-接入 [best-fan/cn_all.m3u8](https://raw.githubusercontent.com/best-fan/iptv-sources/main/cn_all.m3u8)，动态拉取并与已有频道按名称合并，保留多个备用线路、收藏与最近观看对应的稳定 ID。过滤购物频道、非 HLS 和私网／保留地址。凤凰频道归海外组，国内 HTTPS 优先，HTTP 走既有兼容转发。
+不再自动检测所有备用线路，不在后台下载预检分片；只加载当前线路，真正失败后才尝试下一路径／线路。HLS 缓冲上限 12 秒，无历史回看缓存，换台及时取消请求。无法通过代理修复源站已失效、地区授权限制或浏览器不支持的编码。
 
-2026-11-10 读取到 199 条线路（12 HTTPS、187 HTTP），合并为 52 个频道（50 国内、2 海外）。这是订阅目录数量，不是实测可播放数量。订阅线路不继承已有线路的解码检测结论；混合频道显示待实测。
+直播清单、签名请求与媒体分片排除 PWA 离线缓存，包含 Safari 原生 HLS 请求。
 
-完整目录成功缓存 30 分钟；订阅成功但其他目录失败时 5 分钟刷新；订阅失败时 60 秒后重试，并保留当前实例中上次成功结果；首次启动有本次解析的 52 频道快照备用，显示真实快照获取时间和 fallback 状态。API 独立返回订阅更新时间和频道数量，UI 不会把其他目录失败误报为订阅同步失败。
+## 独立代理
 
-## 直连与转发
+```mermaid
+flowchart LR
+  B[浏览器频道目录与播放器] -->|静态快照| P[Cloudflare Pages]
+  B -->|每6小时更新| I[iptv-org 订阅]
+  B -->|HTTPS 可直连| S[直播源站]
+  B -->|登录后获取签名票据| T[Pages /api/live/ticket]
+  B -->|需要兼容时| W[独立 Cloudflare Worker]
+  W -->|流式转发| S
+```
 
-默认 auto：国内 HTTPS 浏览器直连优先，海外内置频道默认 Cloudflare 转发；国内 HTTP 因 HTTPS 页面的混合内容限制走 CF 兼容转发，不伪称国内流量。直连失败先尝试同源 CF，再尝试下一线路。
-用户可手动强制直连／兼容转发；实际使用路径在播放器旁显示。自定义导入永不通过本站转发，当前仅支持 HTTPS。
-国内/海外是频道分组和默认路由策略，不代表已检测用户所在地屏蔽状态。开着 VPN 时，浏览器直连最终走国内还是代理由用户设备的分流规则决定。
+Pages 只负责已有站点登录和轻量票据，不承载直播视频分片。Worker 不解析全量目录、不缓存视频。请求额度只随实际转发的当前播放流消耗。
 
-兼容接口 `/api/live/stream` 只允许内置频道根入口，HLS 子资源必须有 URL/类型/有效期 HMAC 签名。
-覆盖主/子清单、密钥、初始化段和视频分片；逐跳检查重定向与私网／保留字面地址。
-不转发用户 Cookie 或 Authorization，不提供任意未签名 URL 代理；不能完全防止可信上游的 DNS 重绑定。
-根入口登录验证沿用 middleware 与 PASSWORD，分片 token10 分钟、子清单 24 小时，清单 1MB、单资源 20 秒超时。
-兼容模式会产生 Worker 分片请求，受 Cloudflare 请求额度限制，不承诺无限免费转发。
-不能靠 CF 修复失效源站或保证绕过版权地域限制。
+`workers/live-proxy/` 提供可部署 Worker，参考 [HLS-Proxy-Worker](https://github.com/MHSanaei/HLS-Proxy-Worker)，增加完整主／子清单、音轨、KEY、MAP 和分片重写。配置与命令见 [Worker 部署说明](../workers/live-proxy/README.md)。
 
-## 测速与浮窗
+Pages 环境配置：
 
-各源复用影视的实际媒体字节短采样、3 并发队列与缓存，单源采样 3.5 秒。
-第一条线路立即开始播放，多源测速后台进行，后续结果只更新提示，不打断已开始的线路。首帧等待直连 8 秒、Cloudflare 12 秒，已播放后的缓冲恢复上限 20 秒；首次重复 waiting 事件不会延长首帧期限。
-支持跳过检测、强制重测和手动切源；短时未测得不标为永久失效。
-实时浮窗每秒读取实际分片字节与 video.buffered，支持关闭、重开、常驻；不将预检流量计为播放速度。
-原生 HLS 没有字节数据时不伪造速率。当前选源失败显示具体阶段与 HTTP 错误信息。
+- `LIVE_PROXY_ORIGIN`：独立 Worker 的 HTTPS origin，不含路径。
+- `LIVE_PROXY_SECRET`：随机至少 32 字符，与 Worker Secret 相同。
 
-目录成功实例缓存 30 分钟，失败短缓存 60 秒；来源质量与用户地区网络仍需实测。
-执行环境媒体域名未放行时，测试只证明代码链路／可控媒体，不能声称真实频道全部测通。
+Worker 环境配置：
 
-## 聚合 App 公开配置复核
+- `LIVE_PROXY_SECRET`：同上。
+- `ALLOWED_ORIGINS`：允许的站点 origin，生产为 `https://tv.markoo.cn`。
 
-另外核查了以下公开配置（不是直接照搬 App 可播结论）：
+POST `/api/live/ticket` 沿用站点认证，限制请求体、公共 HTTP(S) 地址及签名请求头，返回 4 小时能力票据，不将站点 Cookie／Authorization 发给 Worker 或源站。源目录来自公开订阅，但此端点也允许已登录用户为合法公共资源获取票据；它不是不登录即可使用的通用代理。
 
-- https://github.com/Lightconer/TVBox-Sources/blob/main/output/live.m3u
-- https://github.com/RaycornM/TVbox-IPTV/blob/main/Tivi.m3u
-- https://github.com/jiusanzhou/tvbox/blob/main/shared/lives.json
-- https://github.com/mytv-android/China-TV-Live-M3U8/blob/main/iptv.m3u
+Worker 核验 HMAC、有效期、CORS，逐跳拒绝私网／保留字面地址，转发 Range，流式读取和取消分片。子票据不能超过根票据有效期；播放器会在过期后显示错误，可重试重新获取票据。域名 DNS 重绑定无法仅靠 URL 字面检查完全消除，应保持站点访问私有。
 
-部分央视 HD 地址只有 HTTP/IP、运营商 RTP，或需 Referer、动态签名和同出口 IP；这些不满足浏览器直接播放条件；只有经有效检测报告确认的公开 HTTP HLS 才加入兼容转发，其余不作为已验证网页直播加入。央视官方调度 API 的开源用法也已查到，但未经同出口/时效实测，不硬编码短期 URL。
+旧 `/api/live` 与 `/api/live/stream` 留作旧客户端兼容，新的 TV 页面不再使用它们。
 
-## 本次验证
+## 验证与限制
 
-使用本地生成的 H.264/AAC HLS 媒体在 Chromium 实际解码：国内直连、海外转发、国内直连 503 后同源转发均能播放，且购物频道不显示。此验证只覆盖播放器及路由链路；执行环境媒体域名网络策略阻止真实频道探测，仍需在用户电信网络及实际 Cloudflare 出口验证频道可用性。
-
-## 用户补充列表核验
-
-额外核对 [fanmingming/live](https://github.com/fanmingming/live)、[Free-TV/IPTV](https://github.com/Free-TV/IPTV)、[best-fan/iptv-sources](https://github.com/best-fan/iptv-sources)、[imDazui/Tvlist-awesome-m3u-m3u8](https://github.com/imDazui/Tvlist-awesome-m3u-m3u8)。前两者只补充名称和品牌域核对过的 HTTPS 候选，并标记未实测；不会整表导入移动 IPv6、联通鉴权、运营商组播或错标条目。iptv-org 国内列表和 imDazui 国内选表已由 daily 上游聚合并检测。
+单元测试覆盖目录去重和过滤、缓存并发、1 万频道虚拟列表、无需测速直接播放、失败换线、签名／过期／请求头／重定向和媒体重写。浏览器使用可控 H.264/AAC 测试视频验证真实解码与代理链路。真实频道还取决于用户网络、源站和 Cloudflare 出口，不能将快照或 HTTP200 宣称为全部可播。

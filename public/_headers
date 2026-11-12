@@ -1,0 +1,4 @@
+
+/live/iptv.m3u
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Content-Type: application/vnd.apple.mpegurl; charset=utf-8

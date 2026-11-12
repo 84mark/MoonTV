@@ -71,7 +71,18 @@ const withPWA = require('next-pwa')({
   skipWaiting: true,
   // next-on-pages does not publish this internal Next.js build manifest.
   buildExcludes: [/app-build-manifest\.json$/],
+  publicExcludes: ['!live/iptv.m3u'],
   runtimeCaching: [
+    {
+      // Native HLS (notably Safari) does not inherit the Hls.js no-store option.
+      // Never persist signed tickets, rolling manifests or live media segments.
+      urlPattern: ({ url }) =>
+        (url.pathname === '/stream' && url.searchParams.has('token')) ||
+        url.pathname === '/api/live/stream' ||
+        /\.(?:m3u8|ts|m4s|aac)(?:$)/i.test(url.pathname),
+      handler: 'NetworkOnly',
+      method: 'GET',
+    },
     {
       // A probe must never fall back to Service Worker media caches either.
       urlPattern: ({ request }) => request.cache === 'no-store',

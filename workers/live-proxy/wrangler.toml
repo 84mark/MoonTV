@@ -1,0 +1,10 @@
+name = "moontv-live-proxy"
+main = "index.ts"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGINS = "https://tv.markoo.cn"
+
+# Set LIVE_PROXY_SECRET with `wrangler secret put`; never commit its value.
+# CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are deployment environment values.

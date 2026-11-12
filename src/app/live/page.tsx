@@ -23,6 +23,7 @@ import {
   useState,
 } from 'react';
 
+import { IptvChannel, loadIptvCatalog } from '@/lib/iptv-catalog';
 import {
   isShoppingChannel,
   LIVE_STORAGE_KEY,
@@ -32,11 +33,11 @@ import {
   mergeLiveChannels,
   parseLiveM3u,
   readLivePreferences,
-  seededLiveChannels,
 } from '@/lib/live';
 
 import LivePlayer from '@/components/LivePlayer';
 import PageLayout from '@/components/PageLayout';
+import VirtualChannelList from '@/components/VirtualChannelList';
 
 const initialPreferences: LivePreferences = {
   favorites: [],
@@ -44,56 +45,57 @@ const initialPreferences: LivePreferences = {
   customM3u: '',
 };
 function LivePageClient() {
-  const [builtin, setBuiltin] = useState(seededLiveChannels);
+  const [builtin, setBuiltin] = useState<LiveChannel[]>([]);
   const [preferences, setPreferences] = useState(initialPreferences);
   const [ready, setReady] = useState(false);
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('国内频道');
+  const [category, setCategory] = useState('全部地区');
+  const [country, setCountry] = useState('');
+  const [genre, setGenre] = useState('');
   const [library, setLibrary] = useState('全部频道');
   const [updatedAt, setUpdatedAt] = useState(0);
   const stage = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState('');
+  const [selectedChannel, setSelectedChannel] = useState<LiveChannel | null>(
+    null
+  );
   const [showImport, setShowImport] = useState(false);
   const [draft, setDraft] = useState('');
   const [notice, setNotice] = useState('');
   const [updating, setUpdating] = useState(false);
-  const refresh = useCallback(async (signal?: AbortSignal) => {
+  const refreshBusy = useRef(false);
+  const lastAttempt = useRef(0);
+  const refreshVersion = useRef(0);
+  const refresh = useCallback(async (signal?: AbortSignal, force = false) => {
+    if (refreshBusy.current) return;
+    refreshBusy.current = true;
+    const version = ++refreshVersion.current;
+    lastAttempt.current = Date.now();
     setUpdating(true);
+    const display = (data: {
+      channels: LiveChannel[];
+      updatedAt: number;
+      stale: boolean;
+      error?: string;
+    }) => {
+      if (signal?.aborted) return;
+      setBuiltin(data.channels);
+      setUpdatedAt(data.updatedAt);
+      setNotice(
+        data.stale
+          ? '正在使用已保存目录，联网后自动更新。'
+          : `订阅已更新，共 ${data.channels.length.toLocaleString()} 个频道。`
+      );
+    };
     try {
-      const response = await fetch('/api/live', { cache: 'no-store', signal });
-      if (!response.ok)
-        throw new Error(
-          response.status === 401
-            ? '登录已过期，请重新登录。'
-            : '频道更新失败，继续使用内置列表。'
-        );
-      const data = await response.json();
-      if (!signal?.aborted) {
-        if (!Array.isArray(data.channels))
-          throw new Error('频道目录暂时不可用');
-        setBuiltin(data.channels);
-        setUpdatedAt(
-          Number(data.subscription?.updatedAt) || Number(data.updatedAt) || 0
-        );
-        setNotice(
-          data.subscription && !data.subscription.fallback
-            ? `订阅已同步，含 ${
-                Number(data.subscription.channelCount) || 0
-              } 个频道。`
-            : data.fallback
-            ? '部分目录暂未更新，继续显示已有频道。'
-            : '频道目录已更新。'
-        );
-      }
-    } catch (error) {
-      if (!signal?.aborted)
-        setNotice(
-          error instanceof Error
-            ? error.message
-            : '频道更新失败，可继续使用内置频道。'
-        );
+      display(await loadIptvCatalog({ signal, force, onCached: display }));
+    } catch {
+      if (!signal?.aborted) setNotice('订阅暂时无法更新，请稍后重试。');
     } finally {
-      if (!signal?.aborted) setUpdating(false);
+      if (version === refreshVersion.current) {
+        refreshBusy.current = false;
+        if (!signal?.aborted) setUpdating(false);
+      }
     }
   }, []);
   useEffect(() => {
@@ -101,7 +103,23 @@ function LivePageClient() {
     setReady(true);
     const controller = new AbortController();
     void refresh(controller.signal);
-    return () => controller.abort();
+    const refreshVisible = () => {
+      // The loader owns the six-hour cache; avoid repeated attempts on tab switches.
+      if (
+        document.visibilityState === 'visible' &&
+        Date.now() - lastAttempt.current >= 5 * 60 * 1000
+      )
+        void refresh(controller.signal);
+    };
+    document.addEventListener('visibilitychange', refreshVisible);
+    const interval = window.setInterval(refreshVisible, 6 * 60 * 60 * 1000);
+    return () => {
+      controller.abort();
+      refreshBusy.current = false;
+      refreshVersion.current += 1;
+      document.removeEventListener('visibilitychange', refreshVisible);
+      window.clearInterval(interval);
+    };
   }, [refresh]);
   useEffect(() => {
     if (!ready) return;
@@ -119,34 +137,80 @@ function LivePageClient() {
       ]).filter((channel) => !isShoppingChannel(channel)),
     [builtin, preferences.customM3u]
   );
-  const selected = channels.find((c) => c.id === selectedId);
-  const categories = ['国内频道', '海外频道'];
-  const filtered = channels
-    .filter((channel) => {
-      const inCategory =
-        liveChannelRegion(channel) ===
-        (category === '海外频道' ? 'overseas' : 'domestic');
-      const inLibrary =
-        library === '全部频道' ||
-        (library === '收藏'
-          ? preferences.favorites.includes(channel.id)
-          : preferences.recent.includes(channel.id));
-      return (
-        inCategory &&
-        inLibrary &&
-        `${channel.name} ${channel.id} ${channel.category} ${
-          channel.language || ''
-        }`
-          .toLowerCase()
-          .includes(query.trim().toLowerCase())
+  const selected = selectedId ? selectedChannel : null;
+  const categories = ['全部地区', '国内频道', '海外频道'];
+  const countryOptions = useMemo(() => {
+    const values = new Map<string, string>();
+    for (const channel of channels) {
+      const item = channel as Partial<IptvChannel>;
+      if (item.country)
+        values.set(item.country, item.countryName || item.country);
+    }
+    return Array.from(values).sort((a, b) => a[1].localeCompare(b[1], 'zh-CN'));
+  }, [channels]);
+  const genreOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          channels
+            .flatMap(
+              (channel) =>
+                (channel as Partial<IptvChannel>).categories || [
+                  channel.category,
+                ]
+            )
+            .filter(Boolean)
+        )
+      ).sort(),
+    [channels]
+  );
+  const filtered = useMemo(() => {
+    const favorites = new Set(preferences.favorites);
+    const recent = new Map(preferences.recent.map((id, index) => [id, index]));
+    const text = query.trim().toLowerCase();
+    return channels
+      .filter((channel) => {
+        const item = channel as Partial<IptvChannel>;
+        const inRegion =
+          category === '全部地区' ||
+          liveChannelRegion(channel) ===
+            (category === '海外频道' ? 'overseas' : 'domestic');
+        const inLibrary =
+          library === '全部频道' ||
+          (library === '收藏'
+            ? favorites.has(channel.id)
+            : recent.has(channel.id));
+        return (
+          inRegion &&
+          inLibrary &&
+          (!country || item.country === country) &&
+          (!genre || (item.categories || [channel.category]).includes(genre)) &&
+          `${channel.name} ${channel.id} ${channel.category} ${
+            channel.language || ''
+          } ${item.countryName || ''} ${(item.languages || []).join(' ')}`
+            .toLowerCase()
+            .includes(text)
+        );
+      })
+      .sort((a, b) =>
+        library === '最近观看'
+          ? (recent.get(a.id) || 0) - (recent.get(b.id) || 0)
+          : 0
       );
-    })
-    .sort((a, b) =>
-      library === '最近观看'
-        ? preferences.recent.indexOf(a.id) - preferences.recent.indexOf(b.id)
-        : 0
-    );
+  }, [
+    channels,
+    category,
+    country,
+    genre,
+    library,
+    preferences.favorites,
+    preferences.recent,
+    query,
+  ]);
   const choose = (id: string) => {
+    const channel = channels.find((item) => item.id === id);
+    if (!channel) return;
+    setSelectedChannel(channel);
     setSelectedId(id);
     setPreferences((p) => ({
       ...p,
@@ -172,11 +236,12 @@ function LivePageClient() {
             </span>
             <div>
               <h1 className='text-lg font-bold tracking-tight'>电视直播</h1>
+              <p className='text-[11px] text-slate-500'>IPTV · 全球频道</p>
             </div>
           </div>
           <div className='flex items-center gap-1 rounded-xl bg-white/50 p-1 dark:bg-slate-800/60'>
             <button
-              onClick={() => void refresh()}
+              onClick={() => void refresh(undefined, true)}
               disabled={updating}
               className='flex min-h-[40px] items-center gap-2 rounded-lg px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-white/80 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-700'
             >
@@ -243,6 +308,9 @@ function LivePageClient() {
                       : '国内频道'
                   );
                   setLibrary('全部频道');
+                  setCountry('');
+                  setGenre('');
+                  setQuery('');
                   setShowImport(false);
                   setNotice(`已导入 ${parsed.length} 个频道。`);
                 }}
@@ -257,6 +325,9 @@ function LivePageClient() {
                   setSelectedId('');
                   setCategory('国内频道');
                   setLibrary('全部频道');
+                  setCountry('');
+                  setGenre('');
+                  setQuery('');
                   setShowImport(false);
                 }}
               >
@@ -295,27 +366,20 @@ function LivePageClient() {
                     </p>
                   </div>
                   <div className='flex flex-wrap justify-center gap-2'>
-                    {channels
-                      .filter(
-                        (channel) =>
-                          liveChannelRegion(channel) ===
-                          (category === '海外频道' ? 'overseas' : 'domestic')
-                      )
-                      .slice(0, 2)
-                      .map((channel) => (
-                        <button
-                          key={channel.id}
-                          aria-label={`快速选择 ${channel.name}`}
-                          onClick={() => choose(channel.id)}
-                          className='inline-flex min-h-[40px] items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 text-xs font-medium text-slate-200 transition-colors hover:bg-white/15 md:px-4'
-                        >
-                          <Play className='h-3 w-3 fill-current' />
-                          {channel.name}
-                          <span className='text-[10px] text-slate-400'>
-                            {channel.urls.length} 个源
-                          </span>
-                        </button>
-                      ))}
+                    {filtered.slice(0, 2).map((channel) => (
+                      <button
+                        key={channel.id}
+                        aria-label={`快速选择 ${channel.name}`}
+                        onClick={() => choose(channel.id)}
+                        className='inline-flex min-h-[40px] items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 text-xs font-medium text-slate-200 transition-colors hover:bg-white/15 md:px-4'
+                      >
+                        <Play className='h-3 w-3 fill-current' />
+                        {channel.name}
+                        <span className='text-[10px] text-slate-400'>
+                          {channel.urls.length} 个源
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               </section>
@@ -372,8 +436,7 @@ function LivePageClient() {
             <details className='px-1 text-xs text-slate-500'>
               <summary className='cursor-pointer py-2'>播放线路说明</summary>
               <p className='max-w-3xl pb-2 leading-6'>
-                国内频道优先直连，海外频道使用 Cloudflare 转发。HTTP
-                线路及直连失败的内置线路使用兼容转发；实际线路以播放器显示为准。
+                优先直接连接播放源，仅在需要时使用代理。目录自动更新，不会在浏览频道时下载视频或批量测速。
               </p>
             </details>
           </div>
@@ -420,7 +483,10 @@ function LivePageClient() {
                 <button
                   key={value}
                   aria-pressed={category === value}
-                  onClick={() => setCategory(value)}
+                  onClick={() => {
+                    setCategory(value);
+                    setCountry('');
+                  }}
                   className={`min-h-[38px] flex-1 shrink-0 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition-colors ${
                     category === value
                       ? 'bg-white text-sky-700 shadow-sm dark:bg-slate-700 dark:text-sky-300'
@@ -430,6 +496,34 @@ function LivePageClient() {
                   {value}
                 </button>
               ))}
+            </div>
+            <div className='mt-2 grid grid-cols-2 gap-2'>
+              <select
+                aria-label='按国家筛选'
+                value={country}
+                onChange={(event) => setCountry(event.target.value)}
+                className='h-9 min-w-0 rounded-lg border border-slate-200 bg-transparent px-2 text-xs dark:border-slate-700'
+              >
+                <option value=''>所有国家</option>
+                {countryOptions.map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label='按分类筛选'
+                value={genre}
+                onChange={(event) => setGenre(event.target.value)}
+                className='h-9 min-w-0 rounded-lg border border-slate-200 bg-transparent px-2 text-xs dark:border-slate-700'
+              >
+                <option value=''>所有分类</option>
+                {genreOptions.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className='my-2 flex shrink-0 items-center justify-between gap-2 px-1'>
               <div className='flex items-center gap-3'>
@@ -465,77 +559,86 @@ function LivePageClient() {
                 {notice}
               </p>
             )}
-            <div className='min-h-0 space-y-1 overflow-y-auto overscroll-contain lg:pr-1'>
-              {filtered.map((channel) => {
-                const active = channel.id === selectedId;
-                const fav = preferences.favorites.includes(channel.id);
-                return (
-                  <div
-                    key={channel.id}
-                    className={`group relative flex min-w-0 items-center rounded-xl border transition-colors ${
-                      active
-                        ? 'border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/60'
-                        : 'border-transparent hover:bg-slate-100/80 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <button
-                      aria-label={`播放 ${channel.name}`}
-                      aria-pressed={active}
-                      onClick={() => choose(channel.id)}
-                      className='flex min-h-[60px] min-w-0 flex-1 items-center gap-2.5 py-2 pl-2 pr-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 rounded-xl'
+            {filtered.length > 0 && (
+              <VirtualChannelList
+                items={filtered}
+                resetKey={[category, country, genre, library, query].join('|')}
+                renderItem={(channel) => {
+                  const active = channel.id === selectedId;
+                  const fav = preferences.favorites.includes(channel.id);
+                  return (
+                    <div
+                      key={channel.id}
+                      className={`group relative flex min-w-0 items-center rounded-xl border transition-colors ${
+                        active
+                          ? 'border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/60'
+                          : 'border-transparent hover:bg-slate-100/80 dark:hover:bg-slate-800'
+                      }`}
                     >
-                      <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-black tracking-tight ${
-                          active
-                            ? 'bg-sky-500 text-white'
-                            : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
-                        }`}
+                      <button
+                        aria-label={`播放 ${channel.name}`}
+                        aria-pressed={active}
+                        onClick={() => choose(channel.id)}
+                        className='flex min-h-[60px] min-w-0 flex-1 items-center gap-2.5 py-2 pl-2 pr-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 rounded-xl'
                       >
-                        {wordmark(channel.name)}
-                      </span>
-                      <span className='min-w-0 flex-1'>
                         <span
-                          className={`block truncate text-[13px] font-semibold ${
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-black tracking-tight ${
                             active
-                              ? 'text-sky-700 dark:text-sky-300'
-                              : 'text-slate-800 dark:text-slate-100'
+                              ? 'bg-sky-500 text-white'
+                              : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
                           }`}
                         >
-                          {channel.name}
+                          {wordmark(channel.name)}
                         </span>
-                        <span className='mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-400'>
-                          <span className='truncate'>
-                            {active ? '正在观看' : channel.category}
+                        <span className='min-w-0 flex-1'>
+                          <span
+                            className={`block truncate text-[13px] font-semibold ${
+                              active
+                                ? 'text-sky-700 dark:text-sky-300'
+                                : 'text-slate-800 dark:text-slate-100'
+                            }`}
+                          >
+                            {channel.name}
                           </span>
-                          <SourceBadge count={channel.urls.length} />
+                          <span className='mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-400'>
+                            <span className='truncate'>
+                              {active
+                                ? '正在观看'
+                                : (channel as Partial<IptvChannel>)
+                                    .countryName || channel.category}
+                            </span>
+                            <SourceBadge count={channel.urls.length} />
+                          </span>
                         </span>
-                      </span>
-                    </button>
-                    <button
-                      aria-label={`${fav ? '取消收藏' : '收藏'} ${
-                        channel.name
-                      }`}
-                      aria-pressed={fav}
-                      onClick={() => favorite(channel.id)}
-                      className={`flex h-11 w-9 shrink-0 items-center justify-center rounded-lg focus-visible:ring-2 focus-visible:ring-sky-500 ${
-                        fav
-                          ? 'text-rose-500'
-                          : 'text-slate-300 hover:text-rose-400 dark:text-slate-500'
-                      }`}
-                    >
-                      <Heart
-                        className={`h-3.5 w-3.5 ${fav ? 'fill-current' : ''}`}
-                      />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                      </button>
+                      <button
+                        aria-label={`${fav ? '取消收藏' : '收藏'} ${
+                          channel.name
+                        }`}
+                        aria-pressed={fav}
+                        onClick={() => favorite(channel.id)}
+                        className={`flex h-11 w-9 shrink-0 items-center justify-center rounded-lg focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                          fav
+                            ? 'text-rose-500'
+                            : 'text-slate-300 hover:text-rose-400 dark:text-slate-500'
+                        }`}
+                      >
+                        <Heart
+                          className={`h-3.5 w-3.5 ${fav ? 'fill-current' : ''}`}
+                        />
+                      </button>
+                    </div>
+                  );
+                }}
+              />
+            )}
             {!filtered.length && (
               <div className='flex min-h-[160px] flex-col items-center justify-center gap-2 px-4 text-center'>
                 <Search className='h-6 w-6 text-slate-300' />
                 <p className='text-sm font-medium text-slate-500'>
-                  {library === '收藏'
+                  {updating && !channels.length
+                    ? '正在载入频道目录…'
+                    : library === '收藏'
                     ? '还没有收藏频道'
                     : library === '最近观看'
                     ? '选一个频道开始观看'
