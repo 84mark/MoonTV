@@ -384,12 +384,16 @@ export default function LivePlayer({
                   log('直播清单刷新已恢复');
                   if (
                     player &&
-                    !player.video.paused &&
-                    player.video.readyState >= 3
+                    (player.video.paused || player.video.readyState >= 3)
                   ) {
                     clearTimeout(timer);
                     bufferingDeadline = 0;
-                    phase('playing', '正在直播');
+                    phase(
+                      player.video.paused ? 'paused' : 'playing',
+                      player.video.paused
+                        ? '播放已暂停，点击继续播放'
+                        : '正在直播'
+                    );
                   }
                 }
                 // A long healthy interval starts a new recovery budget, not each playing event.

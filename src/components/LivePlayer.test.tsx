@@ -542,3 +542,21 @@ it('cancels a scheduled playlist recovery on channel change or unmount', () => {
   expect(mockHls[0].startLoad).not.toHaveBeenCalled();
   expect(jest.getTimerCount()).toBe(0);
 });
+
+it('does not report a recovered playlist as timed out when the user keeps playback paused', () => {
+  render(<LivePlayer channel={channel} />);
+  act(() => mockPlayers[0].events['video:playing']());
+  act(() => mockPlayers[0].events['video:pause']());
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: true,
+      details: 'levelParsingError',
+    })
+  );
+  act(() => jest.advanceTimersByTime(2000));
+  act(() => mockHls[0].events.levelLoaded('levelLoaded', {}));
+  act(() => jest.advanceTimersByTime(30000));
+  expect(mockPlayers).toHaveLength(1);
+  expect(screen.getByRole('status')).toHaveTextContent('播放已暂停');
+  expect(screen.queryByRole('button', { name: '重新连接' })).toBeNull();
+});
