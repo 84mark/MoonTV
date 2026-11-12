@@ -23,7 +23,10 @@ type Player = {
   destroy: jest.Mock;
 };
 type HlsInstance = {
-  events: Record<string, (event: string, data: { fatal: boolean }) => void>;
+  events: Record<
+    string,
+    (event: string, data: Record<string, unknown>) => void
+  >;
   stopLoad: jest.Mock;
   destroy: jest.Mock;
 };
@@ -56,12 +59,23 @@ jest.mock('artplayer', () => ({
 }));
 jest.mock('hls.js', () => ({
   __esModule: true,
+  FetchLoader: class {
+    load = jest.fn();
+  },
   default: class {
     static isSupported: () => boolean = () => true;
-    static Events: { ERROR: string } = { ERROR: 'error' };
+    static ErrorTypes: Record<string, string> = { MEDIA_ERROR: 'mediaError' };
+    static Events: Record<string, string> = {
+      ERROR: 'error',
+      MANIFEST_LOADED: 'manifestLoaded',
+      MANIFEST_PARSED: 'manifestParsed',
+      FRAG_LOADING: 'fragLoading',
+      FRAG_LOADED: 'fragLoaded',
+    };
     events: HlsInstance['events'] = {};
     stopLoad = jest.fn();
     destroy = jest.fn();
+    recoverMediaError = jest.fn();
     loadSource = jest.fn();
     attachMedia = jest.fn();
     constructor() {
@@ -148,7 +162,7 @@ it('switches on a fatal failure, stops every failed HLS loader, and exposes retr
 
 it('tries the backup after the startup deadline and destroys media and timers on unmount', () => {
   const { unmount } = render(<LivePlayer channel={channel} />);
-  act(() => jest.advanceTimersByTime(8000));
+  act(() => jest.advanceTimersByTime(25000));
   expect(mockPlayers).toHaveLength(2);
   expect(mockHls[0].stopLoad).toHaveBeenCalledTimes(1);
   const player = mockPlayers[1];
@@ -337,7 +351,7 @@ it('keeps a 20 second recovery window after playback has started', () => {
 });
 it('does not extend the first-frame deadline when initial buffering repeats', () => {
   render(<LivePlayer channel={channel} />);
-  act(() => jest.advanceTimersByTime(7000));
+  act(() => jest.advanceTimersByTime(24000));
   act(() => mockPlayers[0].events['video:waiting']());
   act(() => jest.advanceTimersByTime(1000));
   expect(mockPlayers).toHaveLength(2);
@@ -366,4 +380,101 @@ it('never silently drops required User-Agent headers when the proxy is unavailab
   expect(mockPlayers).toHaveLength(0);
   expect(global.fetch).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: '重新连接' })).toBeInTheDocument();
+});
+
+it('shows real connection stages and waits 25 seconds for a slow first frame', () => {
+  render(<LivePlayer channel={channel} />);
+  expect(screen.getByLabelText('播放连接过程')).toHaveTextContent(
+    '加载播放清单'
+  );
+  act(() => jest.advanceTimersByTime(10000));
+  expect(mockPlayers).toHaveLength(1);
+  act(() => mockHls[0].events.manifestLoaded('manifestLoaded', {}));
+  expect(screen.getByLabelText('播放连接过程')).toHaveTextContent(
+    '下载视频分片'
+  );
+  act(() =>
+    mockHls[0].events.fragLoaded('fragLoaded', {
+      frag: { stats: { loaded: 32768 } },
+    })
+  );
+  expect(screen.getByLabelText('播放连接过程')).toHaveTextContent(
+    '等待视频解码'
+  );
+  act(() => jest.advanceTimersByTime(14999));
+  expect(mockPlayers).toHaveLength(1);
+  act(() => jest.advanceTimersByTime(1));
+  expect(mockPlayers).toHaveLength(2);
+  expect(screen.getByRole('log')).toHaveTextContent('首帧等待超过 25 秒');
+});
+
+it('shows nonfatal failures without racing to the backup, and preserves the HTTP failure after switching', () => {
+  render(<LivePlayer channel={channel} />);
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: false,
+      details: 'manifestLoadError',
+      response: { code: 503 },
+    })
+  );
+  expect(mockPlayers).toHaveLength(1);
+  expect(screen.getByRole('log')).toHaveTextContent('HTTP 503');
+  expect(screen.getByRole('status')).toHaveTextContent('正在等待重试');
+  act(() => jest.advanceTimersByTime(1500));
+  expect(mockPlayers).toHaveLength(1);
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: true,
+      details: 'manifestLoadError',
+      response: { code: 404 },
+    })
+  );
+  expect(mockPlayers).toHaveLength(2);
+  expect(screen.getByRole('log')).toHaveTextContent('HTTP 404');
+  expect(screen.getByRole('log')).toHaveTextContent('开始备用线路 2/2');
+});
+
+it('keeps one fixed buffer recovery deadline even when waiting events repeat', () => {
+  render(<LivePlayer channel={channel} />);
+  act(() => mockPlayers[0].events['video:playing']());
+  act(() => mockPlayers[0].events['video:waiting']());
+  act(() => jest.advanceTimersByTime(15000));
+  act(() => mockPlayers[0].events['video:waiting']());
+  act(() => jest.advanceTimersByTime(5000));
+  expect(mockPlayers).toHaveLength(2);
+  expect(screen.getByRole('log')).toHaveTextContent('缓冲等待超过 20 秒');
+});
+
+it('recovers the decoder once and falls back on a repeated fatal decoder error', () => {
+  render(<LivePlayer channel={channel} />);
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: true,
+      type: 'mediaError',
+      details: 'bufferAppendError',
+    })
+  );
+  expect(mockPlayers).toHaveLength(1);
+  expect(screen.getByRole('log')).toHaveTextContent('重新初始化解码器（1/1）');
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: true,
+      type: 'mediaError',
+      details: 'bufferAppendError',
+    })
+  );
+  expect(mockPlayers).toHaveLength(2);
+});
+
+it('does not expose signed URLs in connection errors', () => {
+  render(<LivePlayer channel={{ ...channel, urls: [channel.urls[0]] }} />);
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: true,
+      details:
+        'manifestLoadError https://proxy.example/stream?token=private-secret',
+    })
+  );
+  expect(screen.getByRole('log')).not.toHaveTextContent('private-secret');
+  expect(screen.getByRole('log')).toHaveTextContent('[资源地址]');
 });

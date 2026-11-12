@@ -54,7 +54,7 @@ export default function VirtualChannelList<T extends { id: string }>({
       ref={viewport}
       aria-label='滚动频道列表'
       tabIndex={0}
-      className='relative min-h-[240px] flex-1 overflow-y-auto overscroll-contain'
+      className='relative min-h-[160px] flex-1 overflow-y-auto overscroll-contain'
       style={{ height: 'min(54vh, 520px)' }}
       onScroll={(event) => setOffset(event.currentTarget.scrollTop)}
     >

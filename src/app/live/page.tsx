@@ -444,121 +444,127 @@ function LivePageClient() {
             className='order-2 flex min-w-0 flex-col rounded-2xl border border-white/70 bg-white/70 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 lg:order-1 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-7rem)]'
             aria-label='频道列表'
           >
-            <div className='mb-3 flex shrink-0 items-center justify-between gap-3 px-1'>
-              <h2 className='flex items-center gap-2 font-semibold'>
-                <ListVideo className='h-4 w-4 text-sky-500' />
-                选择频道
-              </h2>
-              <span className='text-[10px] text-slate-400'>
-                {updatedAt
-                  ? `目录 ${new Intl.DateTimeFormat('zh-CN', {
-                      timeZone: 'Asia/Shanghai',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    }).format(updatedAt)}`
-                  : '候选目录'}
-              </span>
-            </div>
-            <label className='flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/70 px-3 dark:border-slate-700 dark:bg-slate-800'>
-              <Search className='h-4 w-4 shrink-0 text-slate-400' />
-              <input
-                aria-label='搜索频道'
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder='搜索频道或语言'
-                className='min-h-[44px] min-w-0 flex-1 bg-transparent text-sm outline-none'
-              />
-              {query && (
-                <button
-                  aria-label='清除频道搜索'
-                  onClick={() => setQuery('')}
-                  className='p-1'
-                >
-                  <X className='h-3.5 w-3.5' />
-                </button>
-              )}
-            </label>
-            <div className='mt-3 flex gap-1 overflow-x-auto rounded-xl bg-slate-100/80 p-1 dark:bg-slate-800'>
-              {categories.map((value) => (
-                <button
-                  key={value}
-                  aria-pressed={category === value}
-                  onClick={() => {
-                    setCategory(value);
-                    setCountry('');
-                  }}
-                  className={`min-h-[38px] flex-1 shrink-0 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition-colors ${
-                    category === value
-                      ? 'bg-white text-sky-700 shadow-sm dark:bg-slate-700 dark:text-sky-300'
-                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
-                  }`}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-            <div className='mt-2 grid grid-cols-2 gap-2'>
-              <select
-                aria-label='按国家筛选'
-                value={country}
-                onChange={(event) => setCountry(event.target.value)}
-                className='h-9 min-w-0 rounded-lg border border-slate-200 bg-transparent px-2 text-xs dark:border-slate-700'
-              >
-                <option value=''>所有国家</option>
-                {countryOptions.map(([code, name]) => (
-                  <option key={code} value={code}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label='按分类筛选'
-                value={genre}
-                onChange={(event) => setGenre(event.target.value)}
-                className='h-9 min-w-0 rounded-lg border border-slate-200 bg-transparent px-2 text-xs dark:border-slate-700'
-              >
-                <option value=''>所有分类</option>
-                {genreOptions.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className='my-2 flex shrink-0 items-center justify-between gap-2 px-1'>
-              <div className='flex items-center gap-3'>
-                {[
-                  { label: '全部频道', icon: Radio },
-                  { label: '收藏', icon: Heart },
-                  { label: '最近观看', icon: History },
-                ].map((item) => (
+            <div className='shrink-0'>
+              <div className='mb-3 flex shrink-0 items-center justify-between gap-3 px-1'>
+                <h2 className='flex items-center gap-2 font-semibold'>
+                  <ListVideo className='h-4 w-4 text-sky-500' />
+                  选择频道
+                </h2>
+                <span className='text-[10px] text-slate-400'>
+                  {updatedAt
+                    ? `目录 ${new Intl.DateTimeFormat('zh-CN', {
+                        timeZone: 'Asia/Shanghai',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).format(updatedAt)}`
+                    : '候选目录'}
+                </span>
+              </div>
+              <label className='flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/70 px-3 dark:border-slate-700 dark:bg-slate-800'>
+                <Search className='h-4 w-4 shrink-0 text-slate-400' />
+                <input
+                  aria-label='搜索频道'
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder='搜索频道或语言'
+                  className='min-h-[44px] min-w-0 flex-1 bg-transparent text-sm outline-none'
+                />
+                {query && (
                   <button
-                    key={item.label}
-                    aria-pressed={library === item.label}
-                    onClick={() => setLibrary(item.label)}
-                    className={`inline-flex min-h-[36px] items-center gap-1 text-[11px] font-medium ${
-                      library === item.label
-                        ? 'text-sky-600 dark:text-sky-400'
-                        : 'text-slate-400'
+                    aria-label='清除频道搜索'
+                    onClick={() => setQuery('')}
+                    className='p-1'
+                  >
+                    <X className='h-3.5 w-3.5' />
+                  </button>
+                )}
+              </label>
+              <div
+                role='group'
+                aria-label='按国内海外筛选'
+                className='mt-3 grid min-h-[46px] grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800'
+              >
+                {categories.map((value) => (
+                  <button
+                    key={value}
+                    aria-pressed={category === value}
+                    onClick={() => {
+                      setCategory(value);
+                      setCountry('');
+                    }}
+                    className={`min-h-[38px] min-w-0 whitespace-nowrap rounded-lg px-2 text-xs font-semibold transition-colors ${
+                      category === value
+                        ? 'bg-white text-sky-700 shadow-sm dark:bg-slate-700 dark:text-sky-300'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
                     }`}
                   >
-                    <item.icon className='h-3 w-3' />
-                    {item.label}
+                    {value}
                   </button>
                 ))}
               </div>
-              <span className='shrink-0 text-[11px] text-slate-400'>
-                {filtered.length} 台
-              </span>
+              <div className='mt-2 grid grid-cols-2 gap-2'>
+                <select
+                  aria-label='按国家筛选'
+                  value={country}
+                  onChange={(event) => setCountry(event.target.value)}
+                  className='h-9 min-w-0 rounded-lg border border-slate-200 bg-transparent px-2 text-xs dark:border-slate-700'
+                >
+                  <option value=''>所有国家</option>
+                  {countryOptions.map(([code, name]) => (
+                    <option key={code} value={code}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label='按分类筛选'
+                  value={genre}
+                  onChange={(event) => setGenre(event.target.value)}
+                  className='h-9 min-w-0 rounded-lg border border-slate-200 bg-transparent px-2 text-xs dark:border-slate-700'
+                >
+                  <option value=''>所有分类</option>
+                  {genreOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className='my-2 flex shrink-0 items-center justify-between gap-2 px-1'>
+                <div className='flex items-center gap-3'>
+                  {[
+                    { label: '全部频道', icon: Radio },
+                    { label: '收藏', icon: Heart },
+                    { label: '最近观看', icon: History },
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      aria-pressed={library === item.label}
+                      onClick={() => setLibrary(item.label)}
+                      className={`inline-flex min-h-[36px] items-center gap-1 text-[11px] font-medium ${
+                        library === item.label
+                          ? 'text-sky-600 dark:text-sky-400'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      <item.icon className='h-3 w-3' />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                <span className='shrink-0 text-[11px] text-slate-400'>
+                  {filtered.length} 台
+                </span>
+              </div>
+              {notice && (
+                <p
+                  role='status'
+                  className='mb-2 px-1 text-[10px] leading-5 text-slate-400'
+                >
+                  {notice}
+                </p>
+              )}
             </div>
-            {notice && (
-              <p
-                role='status'
-                className='mb-2 px-1 text-[10px] leading-5 text-slate-400'
-              >
-                {notice}
-              </p>
-            )}
             {filtered.length > 0 && (
               <VirtualChannelList
                 items={filtered}
