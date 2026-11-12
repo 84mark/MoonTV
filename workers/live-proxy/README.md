@@ -19,7 +19,7 @@
 { url: string, playlist: boolean, expires: number, referer?: string, userAgent?: string }
 ```
 
-`expires` 为 Unix 毫秒，根播放票据建议 4 小时，最大 24 小时。Pages 可直接导入 `workers/live-proxy/token.ts` 的 `signProxyToken`；鉴权端点必须验证请求来自已登录用户，且 URL／Referer／User-Agent 来自已认可的订阅条目。浏览器不得获取共享密钥。
+`expires` 为 Unix 毫秒，根播放票据建议 4 小时，最大 24 小时。Pages 可直接导入 `workers/live-proxy/token.ts` 的 `signProxyToken`；当前鉴权端点通过站点中间件验证登录，检查 URL／Referer 为公共 HTTP(S) 地址，并校验 User-Agent 格式；尚未逐项验证这些参数是否属于官方订阅。拥有登录权限的用户可为符合地址规则的资源申请票据。浏览器不得获取共享密钥。
 
 Worker 为子资源签发新票据，但所有票据均不超过根会话的到期时间；分片票据最多 10 分钟。播放会话到期后前端应重新申请根票据并连接。不能把带票据的播放 URL 用作长期公开订阅。
 
