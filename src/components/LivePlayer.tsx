@@ -100,6 +100,7 @@ export default function LivePlayer({
     phase: ConnectionPhase;
     since: number;
     deadline?: number;
+    failure?: string;
   }>({ phase: 'manifest', since: Date.now() });
   const [history, setHistory] = useState<ConnectionEntry[]>([]);
   const [now, setNow] = useState(Date.now());
@@ -198,7 +199,11 @@ export default function LivePlayer({
         `线路 ${line + 1}（${relayed ? '独立 Worker' : '直连'}）：${reason}`,
         true
       );
-      setConnection({ phase: 'error', since: Date.now() });
+      setConnection({
+        phase: 'error',
+        since: Date.now(),
+        failure: safeMessage(reason),
+      });
       clearTimeout(timer);
       hls?.stopLoad();
       if (
@@ -289,7 +294,7 @@ export default function LivePlayer({
                   : '连接失败';
                 const reason = `${label}${code ? `（HTTP ${code}）` : ''} · ${
                   data.details || data.type || '未知错误'
-                }`;
+                }${data.response?.text ? ` · ${data.response.text}` : ''}`;
                 if (data.fatal) {
                   if (
                     data.type &&
@@ -562,6 +567,14 @@ export default function LivePlayer({
                   剩余最多{' '}
                   {Math.max(0, (connection.deadline - now) / 1000).toFixed(0)}{' '}
                   秒
+                </p>
+              )}
+              {connection.failure && (
+                <p
+                  role='alert'
+                  className='mt-3 rounded-lg bg-red-950/70 p-3 text-sm text-red-200 break-words'
+                >
+                  {connection.failure}
                 </p>
               )}
               {connection.phase === 'error' && (

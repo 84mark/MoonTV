@@ -97,7 +97,15 @@ export function createLiveLoader(options: {
                 /Upstream HTTP 4\d\d/.test(upstream) &&
                 !/Upstream HTTP (408|429)/.test(upstream);
               if (!retry(error.code, terminal))
-                callbacks.onError(error, ctx, response, stats);
+                callbacks.onError(
+                  {
+                    ...error,
+                    text: upstream ? `${error.text} · ${upstream}` : error.text,
+                  },
+                  ctx,
+                  response,
+                  stats
+                );
             };
             // Read only the existing error response, never an additional diagnostic request.
             if (
