@@ -49,6 +49,7 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
     },
     { icon: Baby, label: '少儿', href: '/kids' },
     { icon: Radio, label: '电视', href: '/live' },
+    { icon: Tv, label: '国内直播', href: '/domestic-live' },
   ]);
 
   useEffect(() => {
