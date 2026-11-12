@@ -29,6 +29,7 @@ type HlsInstance = {
   >;
   stopLoad: jest.Mock;
   destroy: jest.Mock;
+  startLoad: jest.Mock;
 };
 const mockPlayers: Player[] = [];
 const mockHls: HlsInstance[] = [];
@@ -67,6 +68,7 @@ jest.mock('hls.js', () => ({
     static ErrorTypes: Record<string, string> = { MEDIA_ERROR: 'mediaError' };
     static Events: Record<string, string> = {
       ERROR: 'error',
+      LEVEL_LOADED: 'levelLoaded',
       MANIFEST_LOADED: 'manifestLoaded',
       MANIFEST_PARSED: 'manifestParsed',
       FRAG_LOADING: 'fragLoading',
@@ -74,6 +76,7 @@ jest.mock('hls.js', () => ({
     };
     events: HlsInstance['events'] = {};
     stopLoad = jest.fn();
+    startLoad = jest.fn();
     destroy = jest.fn();
     recoverMediaError = jest.fn();
     loadSource = jest.fn();
@@ -477,4 +480,65 @@ it('does not expose signed URLs in connection errors', () => {
   );
   expect(screen.getByRole('log')).not.toHaveTextContent('private-secret');
   expect(screen.getByRole('log')).toHaveTextContent('[资源地址]');
+});
+
+it('retries an invalid live refresh without replacing the player or decoding buffer', () => {
+  render(<LivePlayer channel={channel} />);
+  const player = mockPlayers[0];
+  act(() => player.events['video:playing']());
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: true,
+      details: 'levelParsingError',
+      reason: 'Missing Target Duration',
+    })
+  );
+  expect(player.destroy).not.toHaveBeenCalled();
+  expect(mockPlayers).toHaveLength(1);
+  expect(screen.getByRole('log')).toHaveTextContent('Missing Target Duration');
+  expect(screen.queryByRole('button', { name: '重新连接' })).toBeNull();
+  act(() => jest.advanceTimersByTime(1999));
+  expect(mockHls[0].startLoad).not.toHaveBeenCalled();
+  act(() => jest.advanceTimersByTime(1));
+  expect(mockHls[0].startLoad).toHaveBeenCalledWith(-1);
+  act(() => mockHls[0].events.levelLoaded('levelLoaded', {}));
+  expect(screen.getByRole('log')).toHaveTextContent('直播清单刷新已恢复');
+});
+it('stops after two real playlist recoveries rather than retrying a permanently invalid source forever', () => {
+  render(<LivePlayer channel={{ ...channel, urls: [channel.urls[0]] }} />);
+  act(() => mockPlayers[0].events['video:playing']());
+  for (let i = 0; i < 2; i++) {
+    act(() =>
+      mockHls[0].events.error('error', {
+        fatal: true,
+        details: 'levelParsingError',
+        reason: 'Missing Target Duration',
+      })
+    );
+    act(() => jest.advanceTimersByTime(2000));
+  }
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: true,
+      details: 'levelParsingError',
+      reason: 'Missing Target Duration',
+    })
+  );
+  expect(mockHls[0].startLoad).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('button', { name: '重新连接' })).toBeInTheDocument();
+  expect(screen.getByRole('log')).toHaveTextContent('已完成两次恢复');
+});
+it('cancels a scheduled playlist recovery on channel change or unmount', () => {
+  const { unmount } = render(<LivePlayer channel={channel} />);
+  act(() => mockPlayers[0].events['video:playing']());
+  act(() =>
+    mockHls[0].events.error('error', {
+      fatal: true,
+      details: 'levelParsingError',
+    })
+  );
+  unmount();
+  act(() => jest.advanceTimersByTime(10000));
+  expect(mockHls[0].startLoad).not.toHaveBeenCalled();
+  expect(jest.getTimerCount()).toBe(0);
 });

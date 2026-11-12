@@ -147,6 +147,10 @@ export default function LivePlayer({
     let switched = false;
     let bufferingDeadline = 0;
     let recoveredMedia = false;
+    let playlistRetries = 0;
+    let lastPlaylistRecovery = 0;
+    let recoveringPlaylist = false;
+    let playlistRetryTimer: ReturnType<typeof setTimeout> | undefined;
     let currentPhase: ConnectionPhase = relayed ? 'authorize' : 'manifest';
     const log = (text: string, error = false) => {
       if (disposed) return;
@@ -195,6 +199,7 @@ export default function LivePlayer({
     ) => {
       if (disposed || switched) return;
       switched = true;
+      clearTimeout(playlistRetryTimer);
       log(
         `线路 ${line + 1}（${relayed ? '独立 Worker' : '直连'}）：${reason}`,
         true
@@ -292,9 +297,52 @@ export default function LivePlayer({
                   : /media|buffer/i.test(data.details || '')
                   ? '视频解码或缓冲异常'
                   : '连接失败';
+                const detail = data.reason || data.error?.message;
                 const reason = `${label}${code ? `（HTTP ${code}）` : ''} · ${
                   data.details || data.type || '未知错误'
-                }${data.response?.text ? ` · ${data.response.text}` : ''}`;
+                }${data.response?.text ? ` · ${data.response.text}` : ''}${
+                  detail ? ` · ${detail}` : ''
+                }`;
+                if (
+                  firstFrame &&
+                  data.fatal &&
+                  /^(levelParsingError|levelEmptyError)$/.test(
+                    data.details || ''
+                  )
+                ) {
+                  if (playlistRetryTimer !== undefined) return;
+                  if (playlistRetries < 2 && hls) {
+                    playlistRetries += 1;
+                    lastPlaylistRecovery = Date.now();
+                    recoveringPlaylist = true;
+                    log(
+                      `${reason}；保留已缓冲画面，2 秒后重新请求直播清单（${playlistRetries}/2）`,
+                      true
+                    );
+                    if (!bufferingDeadline)
+                      bufferingDeadline = Date.now() + 20000;
+                    phase(
+                      'buffering',
+                      '直播清单刷新异常，正在重新获取…',
+                      bufferingDeadline
+                    );
+                    clearTimeout(timer);
+                    timer = setTimeout(
+                      () => fail('直播清单恢复超过 20 秒'),
+                      Math.max(0, bufferingDeadline - Date.now())
+                    );
+                    playlistRetryTimer = setTimeout(() => {
+                      if (disposed || switched || !hls) return;
+                      log(`正在重新请求直播清单（恢复 ${playlistRetries}/2）`);
+                      // Restart loading the existing level; keep MediaSource and decoded buffers.
+                      playlistRetryTimer = undefined;
+                      hls.startLoad(-1);
+                    }, 2000);
+                    return;
+                  }
+                  fail(`直播清单持续异常，已完成两次恢复：${reason}`);
+                  return;
+                }
                 if (data.fatal) {
                   if (
                     data.type &&
@@ -326,6 +374,31 @@ export default function LivePlayer({
                   setStatus('资源暂未加载成功，正在等待重试…');
                 } else if (/bufferStalled/i.test(data.details || '')) {
                   log('播放缓冲不足，等待新的视频分片');
+                }
+              });
+              hls.on(Hls.Events.LEVEL_LOADED, () => {
+                if (disposed || switched) return;
+                if (recoveringPlaylist) {
+                  recoveringPlaylist = false;
+                  clearTimeout(playlistRetryTimer);
+                  log('直播清单刷新已恢复');
+                  if (
+                    player &&
+                    !player.video.paused &&
+                    player.video.readyState >= 3
+                  ) {
+                    clearTimeout(timer);
+                    bufferingDeadline = 0;
+                    phase('playing', '正在直播');
+                  }
+                }
+                // A long healthy interval starts a new recovery budget, not each playing event.
+                if (
+                  lastPlaylistRecovery &&
+                  Date.now() - lastPlaylistRecovery >= 60000
+                ) {
+                  playlistRetries = 0;
+                  lastPlaylistRecovery = 0;
                 }
               });
               hls.on(Hls.Events.MANIFEST_LOADED, () => {
@@ -504,6 +577,7 @@ export default function LivePlayer({
     }
     return () => {
       disposed = true;
+      clearTimeout(playlistRetryTimer);
       clearTimeout(timer);
       controller.abort();
       if (player) {
@@ -539,7 +613,15 @@ export default function LivePlayer({
             {seconds !== null && ` · 启动 ${seconds.toFixed(1)} 秒`}
           </p>
         </div>
-        <span className='rounded-full bg-green-500/10 px-3 py-1 text-xs text-green-600'>
+        <span
+          className={`rounded-full px-3 py-1 text-xs ${
+            connection.phase === 'error'
+              ? 'bg-red-500/10 text-red-600'
+              : connection.phase === 'playing'
+              ? 'bg-green-500/10 text-green-600'
+              : 'bg-amber-500/10 text-amber-600'
+          }`}
+        >
           {connection.phase === 'playing'
             ? 'LIVE'
             : connection.phase === 'error'
