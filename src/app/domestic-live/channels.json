@@ -1,0 +1,232 @@
+[
+  {
+    "title": "央视频道",
+    "items": [
+      {
+        "name": "CCTV-1 综合",
+        "url": "https://tv.cctv.com/live/cctv1/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-2 财经",
+        "url": "https://tv.cctv.com/live/cctv2/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-3 综艺",
+        "url": "https://tv.cctv.com/live/cctv3/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-4 中文国际（亚）",
+        "url": "https://tv.cctv.com/live/cctv4/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-5 体育",
+        "url": "https://tv.cctv.com/live/cctv5/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-5+ 体育赛事",
+        "url": "https://tv.cctv.com/live/cctv5plus/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-6 电影",
+        "url": "https://tv.cctv.com/live/cctv6/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-7 国防军事",
+        "url": "https://tv.cctv.com/live/cctv7/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-8 电视剧",
+        "url": "https://tv.cctv.com/live/cctv8/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-9 纪录",
+        "url": "https://tv.cctv.com/live/cctvjilu/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-10 科教",
+        "url": "https://tv.cctv.com/live/cctv10/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-11 戏曲",
+        "url": "https://tv.cctv.com/live/cctv11/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-12 社会与法",
+        "url": "https://tv.cctv.com/live/cctv12/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-13 新闻",
+        "url": "https://tv.cctv.com/live/cctv13/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-14 少儿",
+        "url": "https://tv.cctv.com/live/cctvchild/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-15 音乐",
+        "url": "https://tv.cctv.com/live/cctv15/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-16 奥林匹克",
+        "url": "https://tv.cctv.com/live/cctv16/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-17 农业农村",
+        "url": "https://tv.cctv.com/live/cctv17/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-4 中文国际（欧）",
+        "url": "https://tv.cctv.com/live/cctveurope/",
+        "directory": false
+      },
+      {
+        "name": "CCTV-4 中文国际（美）",
+        "url": "https://tv.cctv.com/live/cctvamerica/",
+        "directory": false
+      }
+    ]
+  },
+  {
+    "title": "地方卫视",
+    "items": [
+      {
+        "name": "东方卫视",
+        "url": "https://live.kankanews.com/huikan/",
+        "directory": false
+      },
+      {
+        "name": "湖南卫视",
+        "url": "https://www.mgtv.com/live/",
+        "directory": false
+      },
+      {
+        "name": "浙江卫视",
+        "url": "https://www.cztv.com/live/",
+        "directory": false
+      },
+      {
+        "name": "江苏卫视",
+        "url": "https://www.tvyan.com/tv/jiangsutv/",
+        "directory": true
+      },
+      {
+        "name": "北京卫视",
+        "url": "https://www.btime.com/btv/btvsy_index",
+        "directory": false
+      },
+      {
+        "name": "深圳卫视",
+        "url": "https://www.tvyan.com/tv/shenzhentv/",
+        "directory": true
+      },
+      {
+        "name": "安徽卫视",
+        "url": "https://www.tvyan.com/tv/anhuitv/",
+        "directory": true
+      },
+      {
+        "name": "内蒙古卫视",
+        "url": "https://www.nmtv.cn/folder84/folder86/folder137",
+        "directory": false
+      },
+      {
+        "name": "广东卫视",
+        "url": "https://www.gdtv.cn/tv/TVS1",
+        "directory": false
+      },
+      {
+        "name": "湖北卫视",
+        "url": "https://news.hbtv.com.cn/app/tv/157",
+        "directory": false
+      },
+      {
+        "name": "山东卫视",
+        "url": "https://v.iqilu.com/live/sdtv/",
+        "directory": false
+      },
+      {
+        "name": "江西卫视",
+        "url": "https://www.tvyan.com/tv/jiangxitv/",
+        "directory": true
+      },
+      {
+        "name": "海南卫视",
+        "url": "https://www.tvyan.com/tv/hainantv/",
+        "directory": true
+      },
+      {
+        "name": "云南卫视",
+        "url": "https://www.tvyan.com/tv/yunnantv/",
+        "directory": true
+      },
+      {
+        "name": "黑龙江卫视",
+        "url": "https://www.tvyan.com/tv/heilongjiangtv/",
+        "directory": true
+      },
+      {
+        "name": "东南卫视",
+        "url": "https://live.fjtv.net/setv/",
+        "directory": false
+      },
+      {
+        "name": "河北卫视",
+        "url": "https://www.tvyan.com/tv/hebeitv/",
+        "directory": true
+      },
+      {
+        "name": "四川卫视",
+        "url": "https://www.tvyan.com/tv/sichuantv/",
+        "directory": true
+      },
+      {
+        "name": "山西卫视",
+        "url": "https://www.tvyan.com/tv/shanxitv/",
+        "directory": true
+      },
+      {
+        "name": "辽宁卫视",
+        "url": "https://www.tvyan.com/tv/liaoningtv/",
+        "directory": true
+      },
+      {
+        "name": "重庆卫视",
+        "url": "https://www.tvyan.com/tv/chongqingtv/",
+        "directory": true
+      },
+      {
+        "name": "河南卫视",
+        "url": "https://www.tvyan.com/tv/henantv/",
+        "directory": true
+      },
+      {
+        "name": "贵州卫视",
+        "url": "https://www.gzstv.com/tv/ch01",
+        "directory": false
+      },
+      {
+        "name": "新疆卫视",
+        "url": "https://www.tvyan.com/tv/xinjiangtv/",
+        "directory": true
+      }
+    ]
+  }
+]
