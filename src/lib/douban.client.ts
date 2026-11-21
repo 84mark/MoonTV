@@ -1,6 +1,26 @@
 import { DoubanItem, DoubanResult } from './types';
 import { getDoubanProxyUrl } from './utils';
 
+export const DOUBAN_PAGE_SIZE = 12;
+
+let categoryQueue: Promise<unknown> = Promise.resolve();
+let retryAfter = 0;
+export const DOUBAN_RATE_LIMIT_MESSAGE = '豆瓣请求较频繁，请稍后重新加载。';
+
+function checkCategoryRateLimit(response: Response) {
+  if (response.status !== 429) return;
+  const header = response.headers.get('Retry-After');
+  const seconds =
+    header && /^\d+$/.test(header)
+      ? Number(header)
+      : header
+      ? (Date.parse(header) - Date.now()) / 1000
+      : NaN;
+  retryAfter =
+    Date.now() + 1000 * (Number.isFinite(seconds) ? Math.max(1, seconds) : 30);
+  throw new Error(DOUBAN_RATE_LIMIT_MESSAGE);
+}
+
 interface DoubanCategoriesParams {
   kind: 'tv' | 'movie';
   category: string;
@@ -33,7 +53,10 @@ async function fetchWithTimeout(
   options: RequestInit = {}
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) abort();
+  options.signal?.addEventListener('abort', abort, { once: true });
+  const timeoutId = setTimeout(abort, 10000); // 10秒超时
 
   // 检查是否使用代理
   const proxyUrl = getDoubanProxyUrl();
@@ -58,6 +81,8 @@ async function fetchWithTimeout(
   } catch (error) {
     clearTimeout(timeoutId);
     throw error;
+  } finally {
+    options.signal?.removeEventListener('abort', abort);
   }
 }
 
@@ -72,9 +97,16 @@ export function shouldUseDoubanClient(): boolean {
  * 浏览器端豆瓣分类数据获取函数
  */
 export async function fetchDoubanCategories(
-  params: DoubanCategoriesParams
+  params: DoubanCategoriesParams,
+  signal?: AbortSignal
 ): Promise<DoubanResult> {
-  const { kind, category, type, pageLimit = 20, pageStart = 0 } = params;
+  const {
+    kind,
+    category,
+    type,
+    pageLimit = DOUBAN_PAGE_SIZE,
+    pageStart = 0,
+  } = params;
 
   // 验证参数
   if (!['tv', 'movie'].includes(kind)) {
@@ -96,8 +128,9 @@ export async function fetchDoubanCategories(
   const target = `https://m.douban.com/rexxar/api/v2/subject/recent_hot/${kind}?start=${pageStart}&limit=${pageLimit}&category=${category}&type=${type}`;
 
   try {
-    const response = await fetchWithTimeout(target);
+    const response = await fetchWithTimeout(target, { signal });
 
+    checkCategoryRateLimit(response);
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
@@ -120,13 +153,15 @@ export async function fetchDoubanCategories(
     };
   } catch (error) {
     // 触发全局错误提示
-    if (typeof window !== 'undefined') {
+    if (!signal && typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('globalError', {
           detail: { message: '获取豆瓣分类数据失败' },
         })
       );
     }
+    if (error instanceof Error && error.message === DOUBAN_RATE_LIMIT_MESSAGE)
+      throw error;
     throw new Error(`获取豆瓣分类数据失败: ${(error as Error).message}`);
   }
 }
@@ -134,22 +169,51 @@ export async function fetchDoubanCategories(
 /**
  * 统一的豆瓣分类数据获取函数，根据代理设置选择使用服务端 API 或客户端代理获取
  */
-export async function getDoubanCategories(
-  params: DoubanCategoriesParams
+export function getDoubanCategories(
+  params: DoubanCategoriesParams,
+  signal?: AbortSignal
+): Promise<DoubanResult> {
+  const pending = categoryQueue.then(() => {
+    if (signal?.aborted)
+      throw new DOMException('Request canceled', 'AbortError');
+    if (Date.now() < retryAfter) throw new Error(DOUBAN_RATE_LIMIT_MESSAGE);
+    return requestDoubanCategories(params, signal);
+  });
+  categoryQueue = pending.catch(() => undefined);
+  return pending;
+}
+
+async function requestDoubanCategories(
+  params: DoubanCategoriesParams,
+  signal?: AbortSignal
 ): Promise<DoubanResult> {
   if (shouldUseDoubanClient()) {
     // 使用客户端代理获取（当设置了代理 URL 时）
-    return fetchDoubanCategories(params);
+    return fetchDoubanCategories(params, signal);
   } else {
     // 使用服务端 API（当没有设置代理 URL 时）
-    const { kind, category, type, pageLimit = 20, pageStart = 0 } = params;
+    const {
+      kind,
+      category,
+      type,
+      pageLimit = DOUBAN_PAGE_SIZE,
+      pageStart = 0,
+    } = params;
     const response = await fetch(
-      `/api/douban/categories?kind=${kind}&category=${category}&type=${type}&limit=${pageLimit}&start=${pageStart}`
+      `/api/douban/categories?${new URLSearchParams({
+        kind,
+        category,
+        type,
+        limit: String(pageLimit),
+        start: String(pageStart),
+      })}`,
+      { signal }
     );
 
+    checkCategoryRateLimit(response);
     if (!response.ok) {
       // 触发全局错误提示
-      if (typeof window !== 'undefined') {
+      if (!signal && typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('globalError', {
             detail: { message: '获取豆瓣分类数据失败' },

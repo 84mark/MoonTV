@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server';
 import { getCacheTime } from '@/lib/config';
 import { DoubanItem, DoubanResult } from '@/lib/types';
 
+class DoubanRateLimitError extends Error {
+  constructor(readonly retryAfter: string) {
+    super('豆瓣 HTTP 429');
+  }
+}
+
 interface DoubanCategoryApiResponse {
   total: number;
   items: Array<{
@@ -39,18 +45,34 @@ async function fetchDoubanData(
   };
 
   try {
-    // 尝试直接访问豆瓣API
-    const response = await fetch(url, fetchOptions);
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+    for (let attempt = 0; ; attempt++) {
+      let response: Response;
+      try {
+        response = await fetch(url, fetchOptions);
+      } catch (error) {
+        if (attempt > 0 || controller.signal.aborted) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        continue;
+      }
+      if (response.ok) {
+        const data = await response.json();
+        if (!Array.isArray(data?.items))
+          throw new Error('豆瓣响应缺少分类列表');
+        return data;
+      }
+      await response.body?.cancel();
+      if (response.status === 429) {
+        throw new DoubanRateLimitError(
+          response.headers.get('Retry-After') || '30'
+        );
+      }
+      if (attempt > 0 || ![500, 502, 503, 504].includes(response.status)) {
+        throw new Error(`豆瓣 HTTP ${response.status}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 350));
     }
-
-    return await response.json();
-  } catch (error) {
+  } finally {
     clearTimeout(timeoutId);
-    throw error;
   }
 }
 
@@ -81,21 +103,23 @@ export async function GET(request: Request) {
     );
   }
 
-  if (pageLimit < 1 || pageLimit > 100) {
+  if (!Number.isInteger(pageLimit) || pageLimit < 1 || pageLimit > 100) {
     return NextResponse.json(
       { error: 'pageSize 必须在 1-100 之间' },
       { status: 400 }
     );
   }
 
-  if (pageStart < 0) {
+  if (!Number.isInteger(pageStart) || pageStart < 0) {
     return NextResponse.json(
       { error: 'pageStart 不能小于 0' },
       { status: 400 }
     );
   }
 
-  const target = `https://m.douban.com/rexxar/api/v2/subject/recent_hot/${kind}?start=${pageStart}&limit=${pageLimit}&category=${category}&type=${type}`;
+  const target = `https://m.douban.com/rexxar/api/v2/subject/recent_hot/${kind}?${new URLSearchParams(
+    { start: String(pageStart), limit: String(pageLimit), category, type }
+  )}`;
 
   try {
     // 调用豆瓣 API
@@ -116,7 +140,7 @@ export async function GET(request: Request) {
       list: list,
     };
 
-    const cacheTime = await getCacheTime();
+    const cacheTime = await getCacheTime().catch(() => 7200);
     return NextResponse.json(response, {
       headers: {
         'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
@@ -127,7 +151,15 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: '获取豆瓣数据失败', details: (error as Error).message },
-      { status: 500 }
+      {
+        status: error instanceof DoubanRateLimitError ? 429 : 502,
+        headers: {
+          'Cache-Control': 'no-store',
+          ...(error instanceof DoubanRateLimitError
+            ? { 'Retry-After': error.retryAfter }
+            : {}),
+        },
+      }
     );
   }
 }

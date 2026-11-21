@@ -6,7 +6,12 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getDoubanCategories, getDoubanList } from '@/lib/douban.client';
+import {
+  DOUBAN_PAGE_SIZE,
+  DOUBAN_RATE_LIMIT_MESSAGE,
+  getDoubanCategories,
+  getDoubanList,
+} from '@/lib/douban.client';
 import { readBrowseFilters, saveBrowseFilters } from '@/lib/navigation';
 import { DoubanItem, DoubanResult } from '@/lib/types';
 
@@ -19,7 +24,9 @@ import VideoCard from '@/components/VideoCard';
 function DoubanPageClient() {
   const searchParams = useSearchParams();
   const [doubanData, setDoubanData] = useState<DoubanItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -133,7 +140,10 @@ function DoubanPageClient() {
   }, [type, customCategories]);
 
   // 生成骨架屏数据
-  const skeletonData = Array.from({ length: 25 }, (_, index) => index);
+  const skeletonData = Array.from(
+    { length: DOUBAN_PAGE_SIZE },
+    (_, index) => index
+  );
 
   // 生成API请求参数的辅助函数
   const getRequestParams = useCallback(
@@ -144,7 +154,7 @@ function DoubanPageClient() {
           kind: 'tv' as const,
           category: type,
           type: secondarySelection,
-          pageLimit: 25,
+          pageLimit: DOUBAN_PAGE_SIZE,
           pageStart,
         };
       }
@@ -154,7 +164,7 @@ function DoubanPageClient() {
         kind: type as 'tv' | 'movie',
         category: primarySelection,
         type: secondarySelection,
-        pageLimit: 25,
+        pageLimit: DOUBAN_PAGE_SIZE,
         pageStart,
       };
     },
@@ -162,49 +172,60 @@ function DoubanPageClient() {
   );
 
   // 防抖的数据加载函数
-  const loadInitialData = useCallback(async () => {
-    try {
-      setLoading(true);
-      let data: DoubanResult;
+  const loadInitialData = useCallback(
+    async (signal: AbortSignal) => {
+      try {
+        setLoading(true);
+        let data: DoubanResult;
 
-      if (type === 'custom') {
-        // 自定义分类模式：根据选中的一级和二级选项获取对应的分类
-        const selectedCategory = customCategories.find(
-          (cat) =>
-            cat.type === primarySelection && cat.query === secondarySelection
-        );
+        if (type === 'custom') {
+          // 自定义分类模式：根据选中的一级和二级选项获取对应的分类
+          const selectedCategory = customCategories.find(
+            (cat) =>
+              cat.type === primarySelection && cat.query === secondarySelection
+          );
 
-        if (selectedCategory) {
-          data = await getDoubanList({
-            tag: selectedCategory.query,
-            type: selectedCategory.type,
-            pageLimit: 25,
-            pageStart: 0,
-          });
+          if (selectedCategory) {
+            data = await getDoubanList({
+              tag: selectedCategory.query,
+              type: selectedCategory.type,
+              pageLimit: DOUBAN_PAGE_SIZE,
+              pageStart: 0,
+            });
+          } else {
+            throw new Error('没有找到对应的分类');
+          }
         } else {
-          throw new Error('没有找到对应的分类');
+          data = await getDoubanCategories(getRequestParams(0), signal);
         }
-      } else {
-        data = await getDoubanCategories(getRequestParams(0));
-      }
 
-      if (data.code === 200) {
-        setDoubanData(data.list);
-        setHasMore(data.list.length === 25);
-        setLoading(false);
-      } else {
-        throw new Error(data.message || '获取数据失败');
+        if (signal.aborted) return;
+        if (data.code === 200) {
+          setDoubanData(data.list);
+          setHasMore(data.list.length === DOUBAN_PAGE_SIZE);
+        } else {
+          throw new Error(data.message || '获取数据失败');
+        }
+      } catch (error) {
+        if (!signal.aborted)
+          setError(
+            error instanceof Error &&
+              error.message === DOUBAN_RATE_LIMIT_MESSAGE
+              ? error.message
+              : '暂时无法加载豆瓣分类，请重试。'
+          );
+      } finally {
+        if (!signal.aborted) setLoading(false);
       }
-    } catch (err) {
-      console.error(err);
-    }
-  }, [
-    type,
-    primarySelection,
-    secondarySelection,
-    getRequestParams,
-    customCategories,
-  ]);
+    },
+    [
+      type,
+      primarySelection,
+      secondarySelection,
+      getRequestParams,
+      customCategories,
+    ]
+  );
 
   // 只在选择器准备好后才加载数据
   useEffect(() => {
@@ -214,6 +235,9 @@ function DoubanPageClient() {
     }
 
     // 重置页面状态
+    const controller = new AbortController();
+    setError(null);
+    setLoading(true);
     setDoubanData([]);
     setCurrentPage(0);
     setHasMore(true);
@@ -226,11 +250,12 @@ function DoubanPageClient() {
 
     // 使用防抖机制加载数据，避免连续状态更新触发多次请求
     debounceTimeoutRef.current = setTimeout(() => {
-      loadInitialData();
+      loadInitialData(controller.signal);
     }, 100); // 100ms 防抖延迟
 
     // 清理函数
     return () => {
+      controller.abort();
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
@@ -241,11 +266,13 @@ function DoubanPageClient() {
     primarySelection,
     secondarySelection,
     loadInitialData,
+    retry,
   ]);
 
   // 单独处理 currentPage 变化（加载更多）
   useEffect(() => {
     if (currentPage > 0) {
+      const controller = new AbortController();
       const fetchMoreData = async () => {
         try {
           setIsLoadingMore(true);
@@ -263,32 +290,35 @@ function DoubanPageClient() {
               data = await getDoubanList({
                 tag: selectedCategory.query,
                 type: selectedCategory.type,
-                pageLimit: 25,
-                pageStart: currentPage * 25,
+                pageLimit: DOUBAN_PAGE_SIZE,
+                pageStart: currentPage * DOUBAN_PAGE_SIZE,
               });
             } else {
               throw new Error('没有找到对应的分类');
             }
           } else {
             data = await getDoubanCategories(
-              getRequestParams(currentPage * 25)
+              getRequestParams(currentPage * DOUBAN_PAGE_SIZE),
+              controller.signal
             );
           }
 
+          if (controller.signal.aborted) return;
           if (data.code === 200) {
             setDoubanData((prev) => [...prev, ...data.list]);
-            setHasMore(data.list.length === 25);
+            setHasMore(data.list.length === DOUBAN_PAGE_SIZE);
           } else {
             throw new Error(data.message || '获取数据失败');
           }
-        } catch (err) {
-          console.error(err);
+        } catch {
+          if (!controller.signal.aborted) setError('下一页加载失败，请重试。');
         } finally {
-          setIsLoadingMore(false);
+          if (!controller.signal.aborted) setIsLoadingMore(false);
         }
       };
 
       fetchMoreData();
+      return () => controller.abort();
     }
   }, [
     currentPage,
@@ -301,7 +331,7 @@ function DoubanPageClient() {
   // 设置滚动监听
   useEffect(() => {
     // 如果没有更多数据或正在加载，则不设置监听
-    if (!hasMore || isLoadingMore || loading) {
+    if (!hasMore || isLoadingMore || loading || error) {
       return;
     }
 
@@ -327,7 +357,7 @@ function DoubanPageClient() {
         observerRef.current.disconnect();
       }
     };
-  }, [hasMore, isLoadingMore, loading]);
+  }, [hasMore, isLoadingMore, loading, error]);
 
   // 处理选择器变化
   const handlePrimaryChange = useCallback(
@@ -454,6 +484,18 @@ function DoubanPageClient() {
                 ))}
           </div>
 
+          {error && !loading && (
+            <div role='status' className='py-8 text-center'>
+              <p>{error}</p>
+              <button
+                className='mt-3 rounded-lg border px-4 py-2'
+                onClick={() => setRetry((value) => value + 1)}
+              >
+                重新加载
+              </button>
+            </div>
+          )}
+
           {/* 加载更多指示器 */}
           {hasMore && !loading && (
             <div
@@ -481,7 +523,7 @@ function DoubanPageClient() {
           )}
 
           {/* 空状态 */}
-          {!loading && doubanData.length === 0 && (
+          {!loading && !error && doubanData.length === 0 && (
             <div className='text-center text-gray-500 py-8'>暂无相关内容</div>
           )}
         </div>
@@ -490,10 +532,15 @@ function DoubanPageClient() {
   );
 }
 
+function DoubanSection() {
+  const type = useSearchParams().get('type') || 'movie';
+  return <DoubanPageClient key={type} />;
+}
+
 export default function DoubanPage() {
   return (
     <Suspense>
-      <DoubanPageClient />
+      <DoubanSection />
     </Suspense>
   );
 }

@@ -61,40 +61,38 @@ function HomeClient() {
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const sections = [
+      {
+        params: { kind: 'movie', category: '热门', type: '全部' },
+        update: setHotMovies,
+      },
+      {
+        params: { kind: 'tv', category: 'tv', type: 'tv' },
+        update: setHotTvShows,
+      },
+      {
+        params: { kind: 'tv', category: 'show', type: 'show' },
+        update: setHotVarietyShows,
+      },
+    ] as const;
     const fetchDoubanData = async () => {
-      try {
-        setLoading(true);
-
-        // 并行获取热门电影、热门剧集和热门综艺
-        const [moviesData, tvShowsData, varietyShowsData] = await Promise.all([
-          getDoubanCategories({
-            kind: 'movie',
-            category: '热门',
-            type: '全部',
-          }),
-          getDoubanCategories({ kind: 'tv', category: 'tv', type: 'tv' }),
-          getDoubanCategories({ kind: 'tv', category: 'show', type: 'show' }),
-        ]);
-
-        if (moviesData.code === 200) {
-          setHotMovies(moviesData.list);
+      setLoading(true);
+      for (const { params, update } of sections) {
+        if (controller.signal.aborted) return;
+        try {
+          const data = await getDoubanCategories(params, controller.signal);
+          if (!controller.signal.aborted && data.code === 200)
+            update(data.list);
+        } catch (error) {
+          if (!controller.signal.aborted)
+            console.error('获取豆瓣数据失败:', error);
         }
-
-        if (tvShowsData.code === 200) {
-          setHotTvShows(tvShowsData.list);
-        }
-
-        if (varietyShowsData.code === 200) {
-          setHotVarietyShows(varietyShowsData.list);
-        }
-      } catch (error) {
-        console.error('获取豆瓣数据失败:', error);
-      } finally {
-        setLoading(false);
       }
+      if (!controller.signal.aborted) setLoading(false);
     };
-
-    fetchDoubanData();
+    void fetchDoubanData();
+    return () => controller.abort();
   }, []);
 
   // 处理收藏数据更新的函数
